@@ -1,0 +1,1936 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sample Collector</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#B3E5FC" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Samples" />
+<meta name="format-detection" content="telephone=no" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png" />
+<style>
+  :root {
+    --bg: #f7faf9;
+    --surface: #ffffff;
+    --surface-2: #eef5f3;
+    --text: #0f172a;
+    --muted: #64748b;
+    --accent: #0f766e;
+    --accent-2: #0d9488;
+    --warn: #b45309;
+    --danger: #b91c1c;
+    --border: #d7e3e0;
+    --shadow: 0 2px 8px rgba(15, 23, 42, .06);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0b1210;
+      --surface: #121c1a;
+      --surface-2: #18262323;
+      --text: #e6efed;
+      --muted: #9aa7a3;
+      --accent: #2dd4bf;
+      --accent-2: #5eead4;
+      --warn: #fbbf24;
+      --danger: #f87171;
+      --border: #23312e;
+      --shadow: 0 2px 8px rgba(0,0,0,.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+  body { min-height: 100svh; padding-bottom: env(safe-area-inset-bottom); }
+  header.topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 10px) 14px 10px; background: var(--surface); border-bottom: 1px solid var(--border); }
+  header.topbar h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .01em; flex: 1; }
+  header.topbar .back { background: transparent; border: 0; color: var(--accent); font-size: 17px; padding: 6px 8px; margin-left: -8px; cursor: pointer; }
+  header.topbar .actions { display: flex; gap: 6px; align-items: center; }
+  .gear-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 10px 6px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 14px; cursor: pointer; text-decoration: none; }
+  .gear-btn .gear { font-size: 18px; line-height: 1; }
+  .gear-btn .initials-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: #fff; font-weight: 700; font-size: 12px; font-family: ui-monospace, Menlo, monospace; letter-spacing: .03em; }
+  .btn.menu { width: 100%; min-height: 96px; font-size: 20px; font-weight: 600; padding: 18px 18px; border-radius: 18px; flex-direction: column; gap: 6px; }
+  .btn.menu .menu-emoji { font-size: 34px; line-height: 1; }
+  .btn.menu .menu-label { font-size: 18px; font-weight: 600; }
+  .btn.menu .menu-sub { font-size: 13px; color: var(--muted); font-weight: 500; }
+  .btn.menu.primary .menu-sub { color: rgba(255,255,255,.85); }
+  .menu-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .menu-grid .span-2 { grid-column: 1 / -1; }
+  /* Pufferfish save-transition overlay */
+  .puff-overlay { position: fixed; inset: 0; z-index: 50; pointer-events: none; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 50%, rgba(179,229,252,.55), rgba(179,229,252,0) 60%); opacity: 0; animation: puffFade .35s ease-out forwards; }
+  .puff-overlay.leaving { animation: puffFadeOut .4s ease-in forwards; }
+  .puff-overlay .puff { font-size: 120px; line-height: 1; filter: drop-shadow(0 6px 14px rgba(2,132,199,.25)); transform-origin: center; animation: puffBackflip 1s cubic-bezier(.6,0,.4,1) forwards; }
+  @keyframes puffFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes puffFadeOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes puffBackflip {
+    0%   { transform: translate(0,0) rotate(0deg) scale(.6); }
+    20%  { transform: translate(0,-30px) rotate(0deg) scale(1.05); }
+    55%  { transform: translate(0,-44px) rotate(-360deg) scale(1.1); }
+    70%  { transform: translate(10px,-30px) rotate(-360deg) scale(1.05); }
+    100% { transform: translate(140vw,60px) rotate(-360deg) scale(.65); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .puff-overlay, .puff-overlay .puff { animation-duration: .001s; }
+  }
+  .container { padding: 14px; max-width: 720px; margin: 0 auto; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; margin-bottom: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 15px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 12px 16px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 16px; font-weight: 500; cursor: pointer; text-decoration: none; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:active { background: var(--accent-2); }
+  .btn.ghost { background: transparent; }
+  .btn.danger { color: var(--danger); border-color: var(--danger); background: transparent; }
+  .btn.small { min-height: 36px; padding: 6px 10px; font-size: 14px; }
+  .btn.block { width: 100%; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row.wrap { flex-wrap: wrap; }
+  .muted { color: var(--muted); font-size: 13px; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; font-weight: 600; letter-spacing: .03em; }
+  input[type=text], input[type=number], input[type=email], input[type=password], select, textarea {
+    width: 100%; padding: 12px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font-size: 16px; font-family: inherit;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  .field { margin-bottom: 12px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; font-size: 13px; color: var(--text); }
+  .pill.accent { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .pill.warn { color: var(--warn); border-color: var(--warn); background: transparent; }
+  .big-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 18px; letter-spacing: .02em; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .list-item { display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); text-decoration: none; color: var(--text); }
+  .list-item .chev { color: var(--muted); margin-left: auto; }
+  .tissue-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
+  .dialog-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; justify-content: center; z-index: 50; }
+  .dialog { width: 100%; max-width: 560px; background: var(--surface); border-top-left-radius: 20px; border-top-right-radius: 20px; padding: 16px 14px calc(14px + env(safe-area-inset-bottom)); max-height: 85svh; overflow-y: auto; }
+  .dialog h3 { margin: 4px 0 10px; font-size: 16px; }
+  .search-input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 16px; color: var(--text); }
+  .option { padding: 12px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; align-items: center; gap: 10px; }
+  .option:hover { background: var(--surface-2); }
+  .option .code { font-family: ui-monospace, Menlo, monospace; font-size: 13px; background: var(--surface-2); padding: 2px 6px; border-radius: 4px; }
+  .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; margin-top: 8px; }
+  .photo-thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); }
+  .photo-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .photo-thumb button { position: absolute; top: 4px; right: 4px; background: rgba(0,0,0,.6); color: #fff; border: 0; border-radius: 50%; width: 22px; height: 22px; cursor: pointer; font-size: 12px; line-height: 1; }
+  .tissue-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 6px; }
+  .tissue-row .tissue-code { font-family: ui-monospace, Menlo, monospace; font-weight: 600; padding: 2px 8px; background: var(--accent); color: #fff; border-radius: 6px; }
+  .tissue-meta { font-size: 12px; color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); padding: 28px 10px; }
+  .toast { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 999px; font-size: 14px; z-index: 100; opacity: 0; transition: opacity .15s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .fab { position: fixed; right: 16px; bottom: calc(24px + env(safe-area-inset-bottom)); background: var(--accent); color: #fff; border: 0; border-radius: 50%; width: 60px; height: 60px; box-shadow: 0 8px 20px rgba(15,118,110,.35); cursor: pointer; font-size: 28px; line-height: 1; }
+  hr.sep { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+  .readonly { opacity: .75; }
+  details summary { cursor: pointer; padding: 6px 0; font-weight: 600; font-size: 14px; color: var(--muted); }
+  .kbd { font-family: ui-monospace, Menlo, monospace; background: var(--surface-2); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <button class="back" id="backBtn" style="display:none;">‹ Back</button>
+    <h1 id="pageTitle">Sample Collector</h1>
+    <div class="actions" id="pageActions"></div>
+  </header>
+  <main class="container" id="view"></main>
+  <div id="dialogRoot"></div>
+  <div class="toast" id="toast"></div>
+
+<script>
+// ---------- Utility helpers ----------
+const $ = (sel, root=document) => root.querySelector(sel);
+const el = (tag, attrs={}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs||{})) {
+    if (k === 'class') n.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(n.style, v);
+    else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined) n.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    n.appendChild(typeof kid === 'string' ? document.createTextNode(kid) : kid);
+  }
+  return n;
+};
+const pad2 = (n) => String(n).padStart(2, '0');
+const fmtDate = (d) => {
+  const x = new Date(d);
+  return x.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+const monthKey = (d) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${pad2(x.getMonth()+1)}`;
+};
+const mmdd = (d) => {
+  const x = new Date(d);
+  return `${pad2(x.getMonth()+1)}${pad2(x.getDate())}`;
+};
+const showToast = (msg, ms=1600) => {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), ms);
+};
+
+// ---------- IndexedDB wrapper ----------
+const DB_NAME = 'sampleCollectorDB';
+const DB_VER = 1;
+const STORES = ['settings','people','projects','species','sites','tissues','preservations','storageLocations','samples','photos'];
+
+const idbOpen = () => new Promise((resolve, reject) => {
+  const req = indexedDB.open(DB_NAME, DB_VER);
+  req.onupgradeneeded = (e) => {
+    const db = e.target.result;
+    if (!db.objectStoreNames.contains('settings')) db.createObjectStore('settings', { keyPath: 'key' });
+    if (!db.objectStoreNames.contains('people')) db.createObjectStore('people', { keyPath: 'id', autoIncrement: true });
+    if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'id', autoIncrement: true });
+    if (!db.objectStoreNames.contains('species')) db.createObjectStore('species', { keyPath: 'code' });
+    if (!db.objectStoreNames.contains('sites')) db.createObjectStore('sites', { keyPath: 'code' });
+    if (!db.objectStoreNames.contains('tissues')) db.createObjectStore('tissues', { keyPath: 'code' });
+    if (!db.objectStoreNames.contains('preservations')) db.createObjectStore('preservations', { keyPath: 'name' });
+    if (!db.objectStoreNames.contains('storageLocations')) db.createObjectStore('storageLocations', { keyPath: 'name' });
+    if (!db.objectStoreNames.contains('samples')) {
+      const s = db.createObjectStore('samples', { keyPath: 'id' });
+      s.createIndex('collectedAt', 'collectedAt');
+      s.createIndex('projectId', 'projectId');
+      s.createIndex('speciesSiteMonth', 'speciesSiteMonth');
+    }
+    if (!db.objectStoreNames.contains('photos')) {
+      const p = db.createObjectStore('photos', { keyPath: 'id', autoIncrement: true });
+      p.createIndex('organismId', 'organismId');
+    }
+  };
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
+});
+
+let DB;
+const tx = (stores, mode='readonly') => DB.transaction(stores, mode);
+const run = (store, mode, fn) => new Promise((res, rej) => {
+  const t = tx(store, mode);
+  const s = t.objectStore(store);
+  const result = fn(s);
+  t.oncomplete = () => res(result);
+  t.onerror = () => rej(t.error);
+  t.onabort = () => rej(t.error);
+});
+
+const dbGet = (store, key) => new Promise((res, rej) => {
+  const t = tx(store); const r = t.objectStore(store).get(key);
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+});
+const dbAll = (store) => new Promise((res, rej) => {
+  const t = tx(store); const r = t.objectStore(store).getAll();
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+});
+const dbPut = (store, val) => new Promise((res, rej) => {
+  const t = tx(store, 'readwrite'); const r = t.objectStore(store).put(val);
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+});
+const dbDel = (store, key) => new Promise((res, rej) => {
+  const t = tx(store, 'readwrite'); const r = t.objectStore(store).delete(key);
+  r.onsuccess = () => res(); r.onerror = () => rej(r.error);
+});
+const dbClear = (store) => new Promise((res, rej) => {
+  const t = tx(store, 'readwrite'); const r = t.objectStore(store).clear();
+  r.onsuccess = () => res(); r.onerror = () => rej(r.error);
+});
+const dbIndexAll = (store, index, query) => new Promise((res, rej) => {
+  const t = tx(store); const r = t.objectStore(store).index(index).getAll(query);
+  r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+});
+
+// ---------- Settings ----------
+const getSetting = async (key, def=null) => {
+  const s = await dbGet('settings', key);
+  return s ? s.value : def;
+};
+const setSetting = (key, value) => dbPut('settings', { key, value });
+
+// ---------- Seed data ----------
+const SEED = {
+  species: [
+    { code: 'GPO', latin: 'Gymnothorax polyuranodon', common: 'Freshwater moray', usageCount: 0, lastUsedAt: null },
+    { code: 'ONC', latin: 'Oncorhynchus mykiss', common: 'Rainbow trout', usageCount: 0, lastUsedAt: null },
+    { code: 'SSA', latin: 'Salvelinus alpinus', common: 'Arctic char', usageCount: 0, lastUsedAt: null },
+  ],
+  sites: [
+    { code: 'MBA', name: 'Monterey Bay', usageCount: 0, lastUsedAt: null },
+    { code: 'ELH', name: 'Elkhorn Slough', usageCount: 0, lastUsedAt: null },
+    { code: 'SNB', name: 'San Lorenzo River', usageCount: 0, lastUsedAt: null },
+  ],
+  tissues: [
+    { code: 'G', name: 'Gill', usageCount: 0, lastUsedAt: null },
+    { code: 'F', name: 'Fin', usageCount: 0, lastUsedAt: null },
+    { code: 'M', name: 'Muscle', usageCount: 0, lastUsedAt: null },
+    { code: 'L', name: 'Liver', usageCount: 0, lastUsedAt: null },
+    { code: 'W', name: 'Whole organism', usageCount: 0, lastUsedAt: null },
+  ],
+  preservations: [
+    { name: 'Ethanol 95%', usageCount: 1, lastUsedAt: Date.now() }, // make default
+    { name: 'Ethanol 70%', usageCount: 0, lastUsedAt: null },
+    { name: 'RNAlater', usageCount: 0, lastUsedAt: null },
+    { name: 'Formalin 10%', usageCount: 0, lastUsedAt: null },
+    { name: 'Frozen (-20)', usageCount: 0, lastUsedAt: null },
+    { name: 'Frozen (-80)', usageCount: 0, lastUsedAt: null },
+    { name: 'Dry / Silica', usageCount: 0, lastUsedAt: null },
+  ],
+  storageLocations: [],
+  projects: [
+    { name: 'General collection', customFields: [] },
+    { name: 'Morphology study', customFields: [
+      { key: 'standardLength_mm', label: 'Standard length', type: 'number', unit: 'mm' },
+      { key: 'totalLength_mm', label: 'Total length', type: 'number', unit: 'mm' },
+      { key: 'eyeDiameter_mm', label: 'Eye diameter', type: 'number', unit: 'mm' },
+      { key: 'weight_g', label: 'Weight', type: 'number', unit: 'g' },
+    ]},
+  ],
+};
+
+const initSeed = async () => {
+  const seeded = await getSetting('seeded');
+  if (seeded) return;
+  for (const s of SEED.species) await dbPut('species', s);
+  for (const s of SEED.sites) await dbPut('sites', s);
+  for (const s of SEED.tissues) await dbPut('tissues', s);
+  for (const s of SEED.preservations) await dbPut('preservations', s);
+  for (const p of SEED.projects) await dbPut('projects', { ...p, createdAt: Date.now() });
+  await setSetting('seeded', true);
+  await setSetting('teamPasscode', 'field');
+};
+
+// ---------- Most-recently-used sort ----------
+const mruSort = (a, b) => {
+  const la = a.lastUsedAt || 0, lb = b.lastUsedAt || 0;
+  if (lb !== la) return lb - la;
+  return (a.name || a.latin || a.code || '').localeCompare(b.name || b.latin || b.code || '');
+};
+const bumpUsage = async (store, keyField, keyVal) => {
+  const t = tx(store, 'readwrite');
+  const os = t.objectStore(store);
+  const rec = await new Promise((res, rej) => { const r = os.get(keyVal); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  if (rec) { rec.usageCount = (rec.usageCount || 0) + 1; rec.lastUsedAt = Date.now(); os.put(rec); }
+};
+
+// ---------- ID generation ----------
+const genOrganismId = async (speciesCode, siteCode, collectedAt) => {
+  const key = `${speciesCode}|${siteCode}|${monthKey(collectedAt)}`;
+  const existing = await dbIndexAll('samples', 'speciesSiteMonth', key);
+  const nn = pad2((existing.length || 0) + 1);
+  return `${speciesCode}_${siteCode}_${mmdd(collectedAt)}${nn}`;
+};
+
+// ---------- GPS ----------
+const getPosition = (opts={}) => new Promise((resolve, reject) => {
+  if (!('geolocation' in navigator)) return reject(new Error('No geolocation support'));
+  navigator.geolocation.getCurrentPosition(
+    (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy, ts: pos.timestamp }),
+    (err) => reject(err),
+    { enableHighAccuracy: true, timeout: 25000, maximumAge: 0, ...opts }
+  );
+});
+const decodeGpsError = (e) => {
+  if (!e) return 'Unknown GPS error';
+  if (e.code === 1) return 'Location permission denied. Enable it in Settings → Safari → Location (or Privacy → Location Services).';
+  if (e.code === 2) return 'Location unavailable — try moving outside or wait a moment and tap Refresh GPS.';
+  if (e.code === 3) return 'GPS timed out — tap Refresh GPS to try again (low-accuracy fallback will kick in).';
+  return e.message || 'GPS error';
+};
+// Try high-accuracy first; if it times out, fall back to low-accuracy (network/Wi-Fi based).
+const getPositionWithFallback = async () => {
+  try {
+    return await getPosition({ enableHighAccuracy: true, timeout: 25000 });
+  } catch (e) {
+    if (e && e.code === 3) {
+      return await getPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+    }
+    throw e;
+  }
+};
+
+// ---------- Photo handling ----------
+const fileToBlobAndThumb = async (file) => {
+  const bmp = await createImageBitmap(file);
+  const thumbSize = 400;
+  const ratio = Math.min(thumbSize / bmp.width, thumbSize / bmp.height, 1);
+  const tw = Math.round(bmp.width * ratio), th = Math.round(bmp.height * ratio);
+  const canvas = new OffscreenCanvas(tw, th);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(bmp, 0, 0, tw, th);
+  const thumbBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+  return { fullBlob: file, thumbBlob, width: bmp.width, height: bmp.height };
+};
+
+// ---------- Router ----------
+const routes = {};
+// Serialize renders so fast navigation / double-taps can't cause two route handlers
+// to append to #view concurrently (which previously duplicated the dashboard).
+let _renderSeq = 0;
+let _renderLock = Promise.resolve();
+const requestRender = () => {
+  _renderLock = _renderLock.then(runRender, runRender);
+  return _renderLock;
+};
+const navigate = (hash) => {
+  if (location.hash !== hash) location.hash = hash;  // triggers hashchange -> requestRender
+  else requestRender();
+};
+window.addEventListener('hashchange', requestRender);
+
+const setTitle = (t) => { $('#pageTitle').textContent = t; };
+const setBack = (onBack) => {
+  const b = $('#backBtn');
+  if (onBack) { b.style.display = ''; b.onclick = onBack; } else { b.style.display = 'none'; b.onclick = null; }
+};
+const setActions = (nodes=[]) => {
+  const host = $('#pageActions');
+  host.innerHTML = '';
+  nodes.forEach(n => host.appendChild(n));
+};
+
+const runRender = async () => {
+  const mySeq = ++_renderSeq;
+  const hash = location.hash || '#home';
+  const [path, ...parts] = hash.slice(1).split('/');
+  const view = $('#view');
+  view.innerHTML = '';
+  setActions([]);
+  setBack(null);
+  const fn = routes[path] || routes.home;
+  try {
+    await fn(view, parts);
+    // If another render superseded us while fn was awaiting DB/network work,
+    // clear anything we appended so we don't double-up with the newer render.
+    if (mySeq !== _renderSeq) view.innerHTML = '';
+  } catch (e) {
+    console.error(e);
+    if (mySeq === _renderSeq) view.appendChild(el('div', { class: 'card' }, 'Error: ' + e.message));
+  }
+};
+// Back-compat: some routes still call render() directly.
+const render = requestRender;
+
+// ---------- Picker dialog ----------
+// Stacked dialogs: each showDialog() APPENDS its own backdrop; close() removes only that one.
+const showDialog = (title, renderBody) => {
+  const root = $('#dialogRoot');
+  const backdrop = el('div', { class: 'dialog-backdrop' });
+  const dlg = el('div', { class: 'dialog' });
+  dlg.appendChild(el('h3', {}, title));
+  backdrop.appendChild(dlg);
+  root.appendChild(backdrop);
+  const close = () => { if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop); };
+  backdrop.onclick = (e) => { if (e.target === backdrop) close(); };
+  renderBody(dlg, close);
+  return close;
+};
+
+const pickFromList = async ({ title, items, renderOption, onCreate, placeholder='Search…', noAutocorrect=false }) => new Promise((resolve) => {
+  showDialog(title, (dlg, close) => {
+    const inputAttrs = { type: 'text', class: 'search-input', placeholder, autofocus: '' };
+    if (noAutocorrect) {
+      inputAttrs.autocomplete = 'off';
+      inputAttrs.autocorrect = 'off';
+      inputAttrs.autocapitalize = 'off';
+      inputAttrs.spellcheck = 'false';
+    }
+    const input = el('input', inputAttrs);
+    const listHost = el('div');
+    dlg.appendChild(input);
+    if (onCreate) {
+      const createBtn = el('button', { class: 'btn block', style: { marginTop: '10px' }, onclick: async () => {
+        const txt = input.value.trim();
+        const rec = await onCreate(txt);
+        if (rec) { close(); resolve(rec); }
+      }}, '+ Add new');
+      dlg.appendChild(createBtn);
+    }
+    dlg.appendChild(listHost);
+    const draw = () => {
+      const q = input.value.trim().toLowerCase();
+      listHost.innerHTML = '';
+      const filtered = !q ? items : items.filter(it => JSON.stringify(it).toLowerCase().includes(q));
+      if (filtered.length === 0) {
+        listHost.appendChild(el('div', { class: 'empty' }, q ? 'No matches — tap "Add new" above' : 'No items yet'));
+      }
+      for (const it of filtered) {
+        const row = el('div', { class: 'option', onclick: () => { close(); resolve(it); } }, renderOption(it));
+        listHost.appendChild(row);
+      }
+    };
+    input.addEventListener('input', draw);
+    draw();
+  });
+});
+
+// ---------- Onboarding ----------
+routes.onboarding = async (root) => {
+  setTitle('Welcome');
+  const step = el('div', { class: 'card' },
+    el('h2', {}, 'Set up'),
+    el('p', {}, 'Pick your name so samples are tagged to the right collector. This stays on this phone.'),
+  );
+  const nameIn = el('input', { type: 'text', placeholder: 'e.g., Eric Witte' });
+  const initIn = el('input', { type: 'text', placeholder: 'Initials (e.g., EW)', maxlength: '4' });
+  nameIn.addEventListener('input', () => {
+    if (!initIn.value) {
+      const parts = nameIn.value.trim().split(/\s+/).filter(Boolean);
+      initIn.value = parts.map(p => p[0]).join('').toUpperCase().slice(0, 3);
+    }
+  });
+  const passIn = el('input', { type: 'text', placeholder: 'Team passcode (optional)' });
+  passIn.value = await getSetting('teamPasscode', 'field');
+  step.append(
+    el('div', { class: 'field' }, el('label', {}, 'Your name'), nameIn),
+    el('div', { class: 'field' }, el('label', {}, 'Your initials'), initIn),
+    el('div', { class: 'field' }, el('label', {}, 'Team passcode'), passIn),
+    el('button', { class: 'btn primary block', onclick: async () => {
+      if (!nameIn.value.trim() || !initIn.value.trim()) { showToast('Name and initials are required'); return; }
+      const person = { name: nameIn.value.trim(), initials: initIn.value.trim().toUpperCase() };
+      const id = await dbPut('people', person);
+      await setSetting('currentPersonId', id);
+      if (passIn.value.trim()) await setSetting('teamPasscode', passIn.value.trim());
+      await setSetting('onboarded', true);
+      navigate('#home');
+    }}, 'Start collecting')
+  );
+  root.appendChild(step);
+};
+
+// ---------- Home ----------
+routes.home = async (root) => {
+  setTitle('Sample Collector');
+  const onboarded = await getSetting('onboarded');
+  if (!onboarded) return navigate('#onboarding');
+  const personId = await getSetting('currentPersonId');
+  const person = personId ? await dbGet('people', personId) : null;
+  const samples = await dbAll('samples');
+  samples.sort((a,b) => (b.collectedAt||0) - (a.collectedAt||0));
+  const recent = samples.slice(0, 5);
+
+  // Top-right: gear icon + current collector initials badge. Tap → Settings.
+  const initials = person?.initials || '—';
+  const gear = el('button', {
+    class: 'gear-btn',
+    title: person ? `Collector: ${person.name} (${person.initials}) — tap to change` : 'Settings',
+    'aria-label': 'Settings',
+    onclick: () => navigate('#settings'),
+  },
+    el('span', { class: 'gear' }, '⚙'),
+    el('span', { class: 'initials-badge' }, initials),
+  );
+  setActions([gear]);
+
+  const menuTile = (opts) => el('button', {
+    class: `btn menu ${opts.primary ? 'primary' : ''}`.trim(),
+    onclick: opts.onclick,
+  },
+    el('span', { class: 'menu-emoji' }, opts.emoji),
+    el('span', { class: 'menu-label' }, opts.label),
+    opts.sub ? el('span', { class: 'menu-sub' }, opts.sub) : null,
+  );
+
+  root.append(
+    el('div', { class: 'menu-grid' },
+      menuTile({ primary: true, emoji: '＋', label: 'New Sample', sub: 'Log an organism + tissues', onclick: () => navigate('#newsample'), /*@span*/ }),
+      menuTile({ emoji: '📒', label: 'All Samples', sub: `${samples.length} on this phone`, onclick: () => navigate('#samples') }),
+      menuTile({ emoji: '🧪', label: 'Projects', sub: 'Custom fields', onclick: () => navigate('#projects') }),
+      menuTile({ emoji: '📋', label: 'Lists', sub: 'Species, sites, tissues', onclick: () => navigate('#lists') }),
+      menuTile({ emoji: '⤓', label: 'Export & Sync', sub: 'CSV, photos, Sheet', onclick: () => navigate('#export') }),
+    ),
+    el('div', { class: 'card', style: { marginTop: '16px' } },
+      el('h2', {}, 'Recent'),
+      recent.length === 0
+        ? el('div', { class: 'empty' }, 'No samples yet. Tap "New Sample" to log your first one.')
+        : el('div', { class: 'list' },
+            ...recent.map(s => sampleListItem(s))
+          )
+    )
+  );
+  // Make the primary "New Sample" tile span both columns.
+  const primaryTile = root.querySelector('.menu-grid .btn.primary');
+  if (primaryTile) primaryTile.classList.add('span-2');
+};
+
+const sampleListItem = (s) => el('a', { class: 'list-item', href: `#sample/${encodeURIComponent(s.id)}` },
+  el('div', {},
+    el('div', { class: 'big-id' }, s.id),
+    el('div', { class: 'muted' }, `${s.speciesLatin || s.speciesCode} · ${s.siteName || s.siteCode} · ${fmtDate(s.collectedAt)}`),
+    el('div', { class: 'row wrap', style: { marginTop: '4px' } },
+      ...(s.tissues||[]).map(t => el('span', { class: 'tissue-chip' }, `_${t.tissueCode}`))
+    )
+  ),
+  el('div', { class: 'chev' }, '›')
+);
+
+// ---------- New Sample ----------
+const newSampleState = () => ({
+  projectId: null,
+  speciesCode: null, speciesLatin: null, speciesCommon: null,
+  siteCode: null, siteName: null,
+  collectorInitials: null,
+  collectedAt: Date.now(),
+  lat: null, lng: null, gpsAccuracy: null, gpsSource: null, // 'device' or 'manual'
+  tissues: [],
+  photos: [], // {id, thumbBlob, fullBlob, seq}
+  notes: '',
+  customFieldValues: {},
+});
+
+// Parse a lat/lng from various pasted formats: "36.6, -121.9", "36.6N 121.9W", "36°36'00.0\"N 121°30'00.0\"W"
+const parseCoord = (str) => {
+  if (!str) return null;
+  str = str.trim().replace(/[()]/g, '');
+  // Decimal degrees with optional N/S/E/W
+  const dd = str.match(/(-?\d+(?:\.\d+)?)\s*°?\s*([NS])?[ ,\s]+(-?\d+(?:\.\d+)?)\s*°?\s*([EW])?/i);
+  if (dd) {
+    let lat = parseFloat(dd[1]);
+    let lng = parseFloat(dd[3]);
+    if (dd[2] && dd[2].toUpperCase() === 'S') lat = -Math.abs(lat);
+    if (dd[2] && dd[2].toUpperCase() === 'N') lat = Math.abs(lat);
+    if (dd[4] && dd[4].toUpperCase() === 'W') lng = -Math.abs(lng);
+    if (dd[4] && dd[4].toUpperCase() === 'E') lng = Math.abs(lng);
+    if (!isNaN(lat) && !isNaN(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+  }
+  // DMS fallback: 36°36'00.0"N 121°30'00.0"W
+  const dms = str.match(/(\d+)°\s*(\d+)['′]\s*(\d+(?:\.\d+)?)[\"″]?\s*([NS])[^\d-]+(\d+)°\s*(\d+)['′]\s*(\d+(?:\.\d+)?)[\"″]?\s*([EW])/i);
+  if (dms) {
+    const toDeg = (d, m, s, hem) => (parseFloat(d) + parseFloat(m)/60 + parseFloat(s)/3600) * (/[SW]/i.test(hem) ? -1 : 1);
+    return { lat: toDeg(dms[1], dms[2], dms[3], dms[4]), lng: toDeg(dms[5], dms[6], dms[7], dms[8]) };
+  }
+  return null;
+};
+
+const openPinDropDialog = (state, onDone) => {
+  showDialog('Drop pin manually', (dlg, close) => {
+    const pasteIn = el('input', { type: 'text', placeholder: 'Paste coordinates (e.g. "36.8008, -121.7868")', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false' });
+    const latIn = el('input', { type: 'text', inputmode: 'decimal', placeholder: 'Latitude', value: state.lat != null ? String(state.lat) : '' });
+    const lngIn = el('input', { type: 'text', inputmode: 'decimal', placeholder: 'Longitude', value: state.lng != null ? String(state.lng) : '' });
+    const errMsg = el('div', { class: 'muted', style: { marginTop: '6px', color: 'var(--warn)' } }, '');
+
+    pasteIn.addEventListener('input', () => {
+      const c = parseCoord(pasteIn.value);
+      if (c) { latIn.value = String(c.lat); lngIn.value = String(c.lng); errMsg.textContent = ''; }
+    });
+
+    dlg.append(
+      el('p', { class: 'muted' }, 'Tip: in Apple Maps, long-press a location → tap the coordinate at the top to copy, then paste here.'),
+      el('div', { class: 'field' }, el('label', {}, 'Paste any format'), pasteIn),
+      el('div', { class: 'row' },
+        el('div', { class: 'field', style: { flex: 1 } }, el('label', {}, 'Latitude'), latIn),
+        el('div', { class: 'field', style: { flex: 1 } }, el('label', {}, 'Longitude'), lngIn),
+      ),
+      errMsg,
+      el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', { class: 'btn block ghost', onclick: close }, 'Cancel'),
+        el('button', { class: 'btn primary block', onclick: () => {
+          const lat = parseFloat(latIn.value);
+          const lng = parseFloat(lngIn.value);
+          if (isNaN(lat) || isNaN(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+            errMsg.textContent = 'Enter valid lat (−90…90) and lng (−180…180).';
+            return;
+          }
+          state.lat = lat; state.lng = lng; state.gpsAccuracy = null; state.gpsSource = 'manual';
+          close();
+          if (onDone) onDone();
+        }}, 'Save pin'),
+      )
+    );
+  });
+};
+
+routes.newsample = async (root) => {
+  setTitle('New Sample');
+  setBack(() => history.back());
+  const personId = await getSetting('currentPersonId');
+  const person = personId ? await dbGet('people', personId) : null;
+  if (!person) return navigate('#onboarding');
+
+  const state = newSampleState();
+  state.collectorInitials = person.initials;
+
+  // Get last-used project to pre-select
+  const projects = await dbAll('projects');
+  const lastProjectId = await getSetting('lastProjectId');
+  state.projectId = lastProjectId && projects.find(p => p.id === lastProjectId) ? lastProjectId : (projects[0] && projects[0].id);
+
+  // Try to grab GPS immediately
+  let gpsStatus = 'Waiting…';
+  let gpsEl;
+
+  const redraw = async () => {
+    root.innerHTML = '';
+    const project = projects.find(p => p.id === state.projectId) || projects[0];
+
+    // ID preview
+    let previewId = '—';
+    if (state.speciesCode && state.siteCode) {
+      const key = `${state.speciesCode}|${state.siteCode}|${monthKey(state.collectedAt)}`;
+      const existing = await dbIndexAll('samples', 'speciesSiteMonth', key);
+      const nn = pad2((existing.length || 0) + 1);
+      previewId = `${state.speciesCode}_${state.siteCode}_${mmdd(state.collectedAt)}${nn}`;
+    }
+
+    const card = el('div', { class: 'card' },
+      el('h2', {}, 'Sample ID preview'),
+      el('div', { class: 'big-id', style: { fontSize: '20px' } }, previewId),
+      el('div', { class: 'muted', style: { marginTop: '4px' } }, state.tissues.length
+        ? 'Tissues: ' + state.tissues.map(t => `${previewId}_${t.tissueCode}`).join(', ')
+        : 'No tissues added yet — add at least one below.')
+    );
+
+    // Project selector
+    const projBlock = el('div', { class: 'field' },
+      el('label', {}, 'Project'),
+      el('button', { class: 'btn block', onclick: async () => {
+        const projs = await dbAll('projects');
+        const p = await pickFromList({
+          title: 'Pick a project',
+          items: projs,
+          renderOption: (p) => el('span', {}, p.name, p.customFields && p.customFields.length ? el('span', { class: 'tag', style: { marginLeft: '8px' } }, `${p.customFields.length} custom fields`) : ''),
+          onCreate: async (name) => {
+            if (!name) return null;
+            const id = await dbPut('projects', { name, customFields: [], createdAt: Date.now() });
+            return { id, name, customFields: [] };
+          }
+        });
+        state.projectId = p.id;
+        await setSetting('lastProjectId', p.id);
+        redraw();
+      }}, project ? project.name : 'Choose project…')
+    );
+
+    // Species
+    const speciesBlock = el('div', { class: 'field' },
+      el('label', {}, 'Species'),
+      el('button', { class: 'btn block', onclick: async () => {
+        const list = (await dbAll('species')).sort(mruSort);
+        const s = await pickFromList({
+          title: 'Pick species',
+          items: list,
+          placeholder: 'Search by code, Latin, or common name…',
+          noAutocorrect: true,
+          renderOption: (s) => el('div', {},
+            el('span', { class: 'code' }, s.code),
+            el('span', { style: { marginLeft: '8px', fontStyle: 'italic' } }, s.latin || '—'),
+            s.common ? el('div', { class: 'muted' }, s.common) : null
+          ),
+          onCreate: async (q) => {
+            // parse "Gymnothorax polyuranodon" -> GPO
+            const parts = q.split(/\s+/).filter(Boolean);
+            let code = '';
+            if (parts.length >= 2) code = (parts[0][0] + parts[1].slice(0,2)).toUpperCase();
+            else if (parts.length === 1 && parts[0].length >= 3) code = parts[0].slice(0,3).toUpperCase();
+            if (!code) { showToast('Type a species name first'); return null; }
+            const existing = await dbGet('species', code);
+            if (existing) { showToast(`Code ${code} already exists`); return existing; }
+            const rec = { code, latin: q, common: '', usageCount: 0, lastUsedAt: Date.now() };
+            await dbPut('species', rec);
+            return rec;
+          }
+        });
+        state.speciesCode = s.code; state.speciesLatin = s.latin; state.speciesCommon = s.common;
+        redraw();
+      }}, state.speciesCode ? `${state.speciesCode} — ${state.speciesLatin}` : 'Pick species…')
+    );
+
+    // Site
+    const siteBlock = el('div', { class: 'field' },
+      el('label', {}, 'Site'),
+      el('button', { class: 'btn block', onclick: async () => {
+        const list = (await dbAll('sites')).sort(mruSort);
+        const s = await pickFromList({
+          title: 'Pick site',
+          items: list,
+          placeholder: 'Search by code or name…',
+          renderOption: (s) => el('div', {}, el('span', { class: 'code' }, s.code), el('span', { style: { marginLeft: '8px' } }, s.name)),
+          onCreate: async (q) => {
+            if (!q) return null;
+            const parts = q.split(/\s+/).filter(Boolean);
+            const code = parts.length >= 2 ? (parts[0][0] + parts[1].slice(0,2)).toUpperCase() : parts[0].slice(0,3).toUpperCase();
+            const existing = await dbGet('sites', code);
+            if (existing) { showToast(`Code ${code} already exists`); return existing; }
+            const rec = { code, name: q, usageCount: 0, lastUsedAt: Date.now() };
+            await dbPut('sites', rec);
+            return rec;
+          }
+        });
+        state.siteCode = s.code; state.siteName = s.name;
+        redraw();
+      }}, state.siteCode ? `${state.siteCode} — ${state.siteName}` : 'Pick site…')
+    );
+
+    // GPS
+    const refreshGps = async () => {
+      gpsStatus = 'Getting GPS… (can take up to 25 s outdoors)';
+      redraw();
+      try {
+        const p = await getPositionWithFallback();
+        state.lat = p.lat; state.lng = p.lng; state.gpsAccuracy = p.acc; state.gpsSource = 'device';
+        gpsStatus = '';
+      } catch (e) {
+        gpsStatus = decodeGpsError(e);
+      }
+      redraw();
+    };
+    const dropPin = () => openPinDropDialog(state, redraw);
+    gpsEl = el('div', { class: 'field' },
+      el('label', {}, 'Location'),
+      state.lat == null
+        ? el('div', {},
+            el('button', { class: 'btn primary block', onclick: refreshGps }, '📍 Get GPS location'),
+            el('button', { class: 'btn block', style: { marginTop: '6px' }, onclick: dropPin }, '📌 Drop pin manually (enter lat/lng)'),
+            el('div', { class: 'muted', style: { marginTop: '6px' } }, gpsStatus || 'Tap to request GPS, or drop a pin if you already have coordinates.')
+          )
+        : el('div', {},
+            el('div', { class: 'row wrap' },
+              el('span', { class: (state.gpsSource === 'manual' ? 'pill warn' : 'pill accent') },
+                `${state.lat.toFixed(5)}, ${state.lng.toFixed(5)}${state.gpsSource === 'manual' ? ' (manual pin)' : ' ±' + Math.round(state.gpsAccuracy || 0) + 'm'}`),
+              el('button', { class: 'btn small ghost', onclick: refreshGps }, 'Refresh GPS'),
+              el('button', { class: 'btn small ghost', onclick: dropPin }, 'Edit pin'),
+            )
+          ),
+      el('div', { class: 'muted', style: { marginTop: '4px' } }, 'Collected at: ' + fmtDate(state.collectedAt))
+    );
+
+    // Tissues
+    const tissuesBlock = el('div', { class: 'card' },
+      el('h2', {}, 'Tissues / sub-samples'),
+      ...state.tissues.map((t, i) => el('div', { class: 'tissue-row' },
+        el('span', { class: 'tissue-code' }, `_${t.tissueCode}`),
+        el('div', {},
+          el('div', { style: { fontSize: '14px', fontWeight: 600 } }, t.tissueName),
+          el('div', { class: 'tissue-meta' }, `${t.preservation}${t.storageLocation ? ' · ' + t.storageLocation : ''}`)
+        ),
+        el('button', { class: 'btn small danger', onclick: () => { state.tissues.splice(i, 1); redraw(); } }, 'Remove')
+      )),
+      el('button', { class: 'btn block', onclick: async () => { await addTissueDialog(state); redraw(); } }, '+ Add tissue')
+    );
+
+    // Photos
+    const photoInput = el('input', { type: 'file', accept: 'image/*', capture: 'environment', multiple: '', style: { display: 'none' }});
+    photoInput.addEventListener('change', async (e) => {
+      for (const f of e.target.files) {
+        try {
+          const { fullBlob, thumbBlob } = await fileToBlobAndThumb(f);
+          state.photos.push({ fullBlob, thumbBlob, seq: state.photos.length + 1 });
+        } catch(err) { showToast('Photo failed: ' + err.message); }
+      }
+      redraw();
+    });
+
+    const photoThumbs = el('div', { class: 'photo-grid' });
+    state.photos.forEach((p, i) => {
+      const url = URL.createObjectURL(p.thumbBlob);
+      const wrap = el('div', { class: 'photo-thumb' },
+        el('img', { src: url, alt: 'photo' }),
+        el('button', { onclick: () => { state.photos.splice(i,1); redraw(); } }, '×')
+      );
+      photoThumbs.appendChild(wrap);
+    });
+
+    const photoBlock = el('div', { class: 'card' },
+      el('h2', {}, 'Photos'),
+      el('div', { class: 'row' },
+        el('button', { class: 'btn', onclick: () => photoInput.click() }, '📷 Take / Add photo'),
+        el('span', { class: 'muted' }, state.photos.length ? `${state.photos.length} photo${state.photos.length>1?'s':''}` : 'None')
+      ),
+      photoInput,
+      photoThumbs,
+    );
+
+    // Notes
+    const notesIn = el('textarea', { placeholder: 'Field notes…' }, state.notes);
+    notesIn.addEventListener('input', () => { state.notes = notesIn.value; });
+    const notesBlock = el('div', { class: 'field' }, el('label', {}, 'Notes'), notesIn);
+
+    // Project custom fields
+    let customFieldsBlock = null;
+    if (project && project.customFields && project.customFields.length) {
+      const inputs = [];
+      for (const cf of project.customFields) {
+        const isNum = cf.type === 'number';
+        const attrs = isNum
+          ? { type: 'number', inputmode: 'decimal', step: 'any', pattern: '[0-9.]*', placeholder: cf.unit ? `value in ${cf.unit}` : '' }
+          : { type: 'text', placeholder: cf.unit ? `value in ${cf.unit}` : '' };
+        const input = el('input', attrs);
+        if (state.customFieldValues[cf.key] != null) input.value = state.customFieldValues[cf.key];
+        input.addEventListener('input', () => { state.customFieldValues[cf.key] = input.value; });
+        inputs.push(el('div', { class: 'field' },
+          el('label', {}, `${cf.label}${cf.unit ? ' (' + cf.unit + ')' : ''}`),
+          input
+        ));
+      }
+      customFieldsBlock = el('div', { class: 'card' },
+        el('h2', {}, `${project.name} fields`),
+        ...inputs
+      );
+    }
+
+    // Save button
+    const save = el('button', { class: 'btn primary block', style: { minHeight: '56px', fontSize: '17px' }, onclick: async () => {
+      if (!state.speciesCode) { showToast('Pick a species'); return; }
+      if (!state.siteCode) { showToast('Pick a site'); return; }
+      if (!state.tissues.length) { showToast('Add at least one tissue'); return; }
+      await saveNewSample(state);
+    }}, '✓ Save sample');
+
+    root.append(
+      card,
+      el('div', { class: 'card' }, projBlock, speciesBlock, siteBlock, gpsEl),
+      tissuesBlock,
+      photoBlock,
+      el('div', { class: 'card' }, notesBlock),
+      customFieldsBlock,
+      save
+    );
+  };
+
+  // Kick off GPS in the background. If it fails or times out, the user can tap "Get GPS".
+  redraw();
+  (async () => {
+    try {
+      const p = await getPositionWithFallback();
+      state.lat = p.lat; state.lng = p.lng; state.gpsAccuracy = p.acc;
+      gpsStatus = '';
+    } catch (e) {
+      gpsStatus = decodeGpsError(e);
+    }
+    redraw();
+  })();
+};
+
+const addTissueDialog = (state) => new Promise((resolve) => {
+  showDialog('Add tissue / sub-sample', async (dlg, close) => {
+    const tissues = (await dbAll('tissues')).sort(mruSort);
+    const preservations = (await dbAll('preservations')).sort(mruSort);
+    const defaultPres = preservations[0] ? preservations[0].name : 'Ethanol 95%';
+    const chosen = { tissueCode: null, tissueName: null, preservation: defaultPres, storageLocation: '' };
+
+    const tBtn = el('button', { class: 'btn block', onclick: async () => {
+      const t = await pickFromList({
+        title: 'Tissue type',
+        items: tissues,
+        renderOption: (t) => el('div', {}, el('span', { class: 'code' }, t.code), el('span', { style: { marginLeft: '8px' } }, t.name)),
+        onCreate: async (q) => {
+          if (!q) return null;
+          const parts = q.split(/\s+/).filter(Boolean);
+          const code = (parts[0][0] || '?').toUpperCase();
+          const existing = await dbGet('tissues', code);
+          if (existing) { showToast(`Code ${code} exists as ${existing.name}`); return existing; }
+          const rec = { code, name: q, usageCount: 0, lastUsedAt: Date.now() };
+          await dbPut('tissues', rec);
+          return rec;
+        }
+      });
+      chosen.tissueCode = t.code; chosen.tissueName = t.name;
+      redraw();
+    }}, 'Pick tissue…');
+
+    const pBtn = el('button', { class: 'btn block', onclick: async () => {
+      const presList = (await dbAll('preservations')).sort(mruSort);
+      const p = await pickFromList({
+        title: 'Preservation',
+        items: presList,
+        renderOption: (p) => el('span', {}, p.name),
+        onCreate: async (q) => {
+          if (!q) return null;
+          const existing = await dbGet('preservations', q);
+          if (existing) return existing;
+          const rec = { name: q, usageCount: 0, lastUsedAt: Date.now() };
+          await dbPut('preservations', rec);
+          return rec;
+        }
+      });
+      chosen.preservation = p.name;
+      redraw();
+    }}, defaultPres);
+
+    const storageIn = el('input', { type: 'text', placeholder: 'Box / freezer / shelf (editable later)' });
+    storageIn.addEventListener('input', () => { chosen.storageLocation = storageIn.value; });
+
+    const container = el('div');
+    const redraw = () => {
+      container.innerHTML = '';
+      container.append(
+        el('div', { class: 'field' }, el('label', {}, 'Tissue type'), tBtn),
+        el('div', { class: 'field' }, el('label', {}, 'Preservation'), pBtn),
+        el('div', { class: 'field' }, el('label', {}, 'Storage location (optional)'), storageIn),
+        el('div', { class: 'row' },
+          el('button', { class: 'btn block ghost', onclick: close }, 'Cancel'),
+          el('button', { class: 'btn primary block', onclick: async () => {
+            if (!chosen.tissueCode) { showToast('Pick a tissue type'); return; }
+            state.tissues.push({ ...chosen });
+            await bumpUsage('tissues', 'code', chosen.tissueCode);
+            await bumpUsage('preservations', 'name', chosen.preservation);
+            if (chosen.storageLocation) {
+              const existing = await dbGet('storageLocations', chosen.storageLocation);
+              if (existing) await bumpUsage('storageLocations', 'name', chosen.storageLocation);
+              else await dbPut('storageLocations', { name: chosen.storageLocation, usageCount: 1, lastUsedAt: Date.now() });
+            }
+            tBtn.textContent = chosen.tissueCode ? `${chosen.tissueCode} — ${chosen.tissueName}` : 'Pick tissue…';
+            pBtn.textContent = chosen.preservation;
+            close();
+            resolve();
+          }}, 'Add tissue'),
+        )
+      );
+      // keep labels on the pick buttons up-to-date
+      tBtn.textContent = chosen.tissueCode ? `${chosen.tissueCode} — ${chosen.tissueName}` : 'Pick tissue…';
+      pBtn.textContent = chosen.preservation;
+    };
+    dlg.appendChild(container);
+    redraw();
+  });
+});
+
+const saveNewSample = async (state) => {
+  const id = await genOrganismId(state.speciesCode, state.siteCode, state.collectedAt);
+  const speciesSiteMonth = `${state.speciesCode}|${state.siteCode}|${monthKey(state.collectedAt)}`;
+  const record = {
+    id,
+    organismId: id,
+    projectId: state.projectId,
+    speciesCode: state.speciesCode,
+    speciesLatin: state.speciesLatin,
+    speciesCommon: state.speciesCommon,
+    siteCode: state.siteCode,
+    siteName: state.siteName,
+    collectorInitials: state.collectorInitials,
+    collectedAt: state.collectedAt,
+    lat: state.lat, lng: state.lng, gpsAccuracy: state.gpsAccuracy, gpsSource: state.gpsSource || (state.lat != null ? 'device' : null),
+    tissues: state.tissues,
+    notes: state.notes || '',
+    customFieldValues: state.customFieldValues || {},
+    speciesSiteMonth,
+    photoFilenames: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    syncStatus: 'pending',
+  };
+
+  // Save photos with the organism-linked filename pattern
+  for (let i = 0; i < state.photos.length; i++) {
+    const p = state.photos[i];
+    const seq = i + 1;
+    const filename = `${id}_${seq}.jpg`;
+    await dbPut('photos', { organismId: id, seq, filename, fullBlob: p.fullBlob, thumbBlob: p.thumbBlob, createdAt: Date.now() });
+    record.photoFilenames.push(filename);
+  }
+
+  await dbPut('samples', record);
+
+  // bump usage counts
+  await bumpUsage('species', 'code', state.speciesCode);
+  await bumpUsage('sites', 'code', state.siteCode);
+
+  showToast(`Saved ${id}`);
+  await playPufferfishTransition();
+  navigate('#home');
+};
+
+// Brief celebratory transition after saving a sample: 🐡 backflip then swim off-screen.
+// Resolves just before the final frame so the route change feels instant.
+const playPufferfishTransition = () => {
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const overlay = el('div', { class: 'puff-overlay' },
+      el('div', { class: 'puff' }, '🐡')
+    );
+    document.body.appendChild(overlay);
+    // Total CSS animation is ~1s; remove just after it finishes.
+    const DURATION = 1000;
+    setTimeout(() => {
+      overlay.classList.add('leaving');
+      setTimeout(() => {
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 400);
+      resolve(); // navigate now; overlay fades out over next 400ms
+    }, DURATION - 80);
+  });
+};
+
+// ---------- Sample list ----------
+routes.samples = async (root) => {
+  setTitle('All Samples');
+  setBack(() => navigate('#home'));
+  const samples = await dbAll('samples');
+  samples.sort((a,b) => (b.collectedAt||0) - (a.collectedAt||0));
+  if (samples.length === 0) {
+    root.appendChild(el('div', { class: 'empty' }, 'No samples yet.'));
+    return;
+  }
+  const list = el('div', { class: 'list' }, ...samples.map(s => sampleListItem(s)));
+  root.appendChild(list);
+};
+
+// ---------- Sample detail / edit ----------
+routes.sample = async (root, parts) => {
+  const id = decodeURIComponent(parts[0] || '');
+  setTitle('Sample');
+  setBack(() => navigate('#samples'));
+  const s = await dbGet('samples', id);
+  if (!s) { root.appendChild(el('div', { class: 'empty' }, 'Sample not found.')); return; }
+  const photos = await dbIndexAll('photos', 'organismId', id);
+  const project = s.projectId ? await dbGet('projects', s.projectId) : null;
+
+  const idCard = el('div', { class: 'card' },
+    el('h2', {}, 'Sample ID'),
+    el('div', { class: 'big-id', style: { fontSize: '22px' } }, s.id),
+    el('div', { class: 'muted', style: { marginTop: '4px' } }, `Collected ${fmtDate(s.collectedAt)} by ${s.collectorInitials || '?'}`),
+  );
+
+  // Species (editable)
+  const speciesRow = el('div', { class: 'row' },
+    el('div', { style: { flex: 1 } }, el('span', { class: 'code tag' }, s.speciesCode), el('span', { style: { marginLeft: '8px', fontStyle: 'italic' } }, s.speciesLatin || '')),
+    el('button', { class: 'btn small', onclick: async () => {
+      const list = (await dbAll('species')).sort(mruSort);
+      const pick = await pickFromList({
+        title: 'Change species',
+        items: list,
+        noAutocorrect: true,
+        renderOption: (p) => el('div', {}, el('span', { class: 'code' }, p.code), el('span', { style: { marginLeft: '8px' } }, p.latin || p.common))
+      });
+      s.speciesCode = pick.code; s.speciesLatin = pick.latin; s.speciesCommon = pick.common;
+      s.updatedAt = Date.now();
+      await dbPut('samples', s);
+      render();
+    }}, 'Change')
+  );
+
+  // Site (read-only, since site+species+date is baked into ID)
+  const siteRow = el('div', {}, el('span', { class: 'code tag' }, s.siteCode), el('span', { style: { marginLeft: '8px' } }, s.siteName || ''));
+
+  // GPS (editable after the fact too)
+  const gpsRow = el('div', { class: 'row wrap' },
+    s.lat != null
+      ? el('span', { class: (s.gpsSource === 'manual' ? 'pill warn' : 'pill accent') }, `${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}${s.gpsSource === 'manual' ? ' (manual pin)' : ' ±'+Math.round(s.gpsAccuracy||0)+'m'}`)
+      : el('span', { class: 'pill warn' }, 'No GPS'),
+    el('button', { class: 'btn small ghost', onclick: () => {
+      openPinDropDialog(s, async () => {
+        s.updatedAt = Date.now();
+        s.syncStatus = 'pending';
+        await dbPut('samples', s);
+        render();
+      });
+    }}, s.lat != null ? 'Edit pin' : 'Drop pin')
+  );
+
+  // Tissues (editable storage + preservation)
+  const tissueEls = (s.tissues || []).map((t, i) => {
+    const storageIn = el('input', { type: 'text', value: t.storageLocation || '', placeholder: 'Storage location' });
+    storageIn.addEventListener('change', async () => {
+      t.storageLocation = storageIn.value;
+      s.updatedAt = Date.now();
+      await dbPut('samples', s);
+      showToast('Storage updated');
+    });
+    const presBtn = el('button', { class: 'btn small', onclick: async () => {
+      const presList = (await dbAll('preservations')).sort(mruSort);
+      const p = await pickFromList({
+        title: 'Change preservation', items: presList,
+        renderOption: (p) => el('span', {}, p.name),
+        onCreate: async (q) => { if (!q) return null; const existing = await dbGet('preservations', q); if (existing) return existing; const rec = { name: q, usageCount: 0, lastUsedAt: Date.now() }; await dbPut('preservations', rec); return rec; }
+      });
+      t.preservation = p.name;
+      s.updatedAt = Date.now();
+      await dbPut('samples', s);
+      render();
+    }}, t.preservation);
+    return el('div', { class: 'tissue-row' },
+      el('span', { class: 'tissue-code' }, `_${t.tissueCode}`),
+      el('div', {},
+        el('div', { style: { fontSize: '14px', fontWeight: 600 } }, t.tissueName),
+        el('div', { class: 'row', style: { marginTop: '4px', gap: '6px', flexWrap: 'wrap' } },
+          presBtn,
+          storageIn
+        )
+      ),
+      el('div', { class: 'big-id tag' }, `${s.id}_${t.tissueCode}`)
+    );
+  });
+
+  // Photos
+  const photoGrid = el('div', { class: 'photo-grid' },
+    ...photos.map(p => {
+      const url = URL.createObjectURL(p.thumbBlob);
+      return el('div', { class: 'photo-thumb' }, el('img', { src: url, alt: p.filename }));
+    })
+  );
+  const addPhotoInput = el('input', { type: 'file', accept: 'image/*', capture: 'environment', multiple: '', style: { display: 'none' } });
+  addPhotoInput.addEventListener('change', async (e) => {
+    const existing = await dbIndexAll('photos', 'organismId', id);
+    let nextSeq = existing.length + 1;
+    for (const f of e.target.files) {
+      const { fullBlob, thumbBlob } = await fileToBlobAndThumb(f);
+      const filename = `${id}_${nextSeq}.jpg`;
+      await dbPut('photos', { organismId: id, seq: nextSeq, filename, fullBlob, thumbBlob, createdAt: Date.now() });
+      s.photoFilenames.push(filename);
+      nextSeq++;
+    }
+    s.updatedAt = Date.now();
+    await dbPut('samples', s);
+    render();
+  });
+
+  // Notes
+  const notesIn = el('textarea', {}, s.notes || '');
+  const notesSave = el('button', { class: 'btn small', onclick: async () => {
+    s.notes = notesIn.value; s.updatedAt = Date.now(); await dbPut('samples', s); showToast('Notes saved');
+  }}, 'Save notes');
+
+  // Custom fields
+  let customEls = null;
+  if (project && project.customFields && project.customFields.length) {
+    const rows = project.customFields.map(cf => {
+      const isNum = cf.type === 'number';
+      const attrs = isNum
+        ? { type: 'number', inputmode: 'decimal', step: 'any', pattern: '[0-9.]*', value: s.customFieldValues?.[cf.key] ?? '' }
+        : { type: 'text', value: s.customFieldValues?.[cf.key] ?? '' };
+      const input = el('input', attrs);
+      input.addEventListener('change', async () => {
+        s.customFieldValues = s.customFieldValues || {};
+        s.customFieldValues[cf.key] = input.value;
+        s.updatedAt = Date.now();
+        await dbPut('samples', s);
+        showToast('Updated');
+      });
+      return el('div', { class: 'field' },
+        el('label', {}, `${cf.label}${cf.unit ? ' (' + cf.unit + ')' : ''}`),
+        input
+      );
+    });
+    customEls = el('div', { class: 'card' }, el('h2', {}, `${project.name} fields`), ...rows);
+  }
+
+  // Delete
+  const delBtn = el('button', { class: 'btn danger block', onclick: async () => {
+    if (!confirm(`Delete ${s.id}? This cannot be undone.`)) return;
+    const ps = await dbIndexAll('photos', 'organismId', id);
+    for (const p of ps) await dbDel('photos', p.id);
+    await dbDel('samples', id);
+    showToast('Deleted');
+    navigate('#samples');
+  }}, '🗑 Delete sample');
+
+  root.append(
+    idCard,
+    el('div', { class: 'card' },
+      el('h2', {}, 'Species'), speciesRow,
+      el('hr', { class: 'sep' }),
+      el('h2', {}, 'Site'), siteRow,
+      el('hr', { class: 'sep' }),
+      el('h2', {}, 'Location'), gpsRow,
+      project ? el('div', {}, el('hr', { class: 'sep' }), el('h2', {}, 'Project'), el('div', {}, project.name)) : null,
+    ),
+    el('div', { class: 'card' }, el('h2', {}, 'Tissues'), ...tissueEls),
+    el('div', { class: 'card' },
+      el('h2', {}, 'Photos'),
+      photos.length === 0 ? el('div', { class: 'muted' }, 'No photos yet.') : photoGrid,
+      el('div', { class: 'row', style: { marginTop: '8px' } },
+        el('button', { class: 'btn small', onclick: () => addPhotoInput.click() }, '+ Add photos'),
+        addPhotoInput,
+        el('span', { class: 'muted' }, `Files: ${s.photoFilenames.join(', ') || '—'}`)
+      )
+    ),
+    el('div', { class: 'card' }, el('h2', {}, 'Notes'), notesIn, el('div', { style: { marginTop: '8px' } }, notesSave)),
+    customEls,
+    delBtn
+  );
+};
+
+// ---------- Lists management ----------
+routes.lists = async (root) => {
+  setTitle('Reference Lists');
+  setBack(() => navigate('#home'));
+  const make = async (label, store, keyField, render, createFn) => {
+    const items = (await dbAll(store)).sort(mruSort);
+    const card = el('div', { class: 'card' },
+      el('h2', {}, label),
+      items.length === 0 ? el('div', { class: 'muted' }, 'Empty') : null,
+      ...items.map(it => el('div', { class: 'row', style: { padding: '8px 0', borderBottom: '1px solid var(--border)' } },
+        el('div', { style: { flex: 1 } }, render(it)),
+        el('button', { class: 'btn small danger', onclick: async () => {
+          if (!confirm(`Remove ${it[keyField]}?`)) return;
+          await dbDel(store, it[keyField]);
+          render_();
+        }}, 'Delete')
+      )),
+      el('button', { class: 'btn block', style: { marginTop: '8px' }, onclick: async () => { await createFn(); render_(); } }, `+ Add ${label.toLowerCase().replace(/s$/, '')}`)
+    );
+    return card;
+  };
+  const render_ = async () => {
+    root.innerHTML = '';
+    root.append(
+      await make('Species', 'species', 'code',
+        (s) => el('span', {}, el('span', { class: 'code' }, s.code), el('span', { style: { marginLeft: '8px', fontStyle: 'italic' } }, s.latin || ''), s.common ? el('span', { class: 'muted', style: { marginLeft: '8px' } }, s.common) : null),
+        async () => {
+          const latin = prompt('Latin binomial (e.g., Gymnothorax polyuranodon):'); if (!latin) return;
+          const parts = latin.trim().split(/\s+/);
+          const suggestedCode = (parts[0][0] + parts[1]?.slice(0,2)).toUpperCase();
+          const code = (prompt('3-letter code:', suggestedCode) || '').toUpperCase().slice(0,6);
+          if (!code) return;
+          const common = prompt('Common name (optional):') || '';
+          await dbPut('species', { code, latin: latin.trim(), common, usageCount: 0, lastUsedAt: null });
+        }
+      ),
+      await make('Sites', 'sites', 'code',
+        (s) => el('span', {}, el('span', { class: 'code' }, s.code), el('span', { style: { marginLeft: '8px' } }, s.name)),
+        async () => {
+          const name = prompt('Site name (e.g., Monterey Bay):'); if (!name) return;
+          const parts = name.trim().split(/\s+/);
+          const suggestedCode = (parts[0][0] + (parts[1]?.slice(0,2) || parts[0].slice(1,3))).toUpperCase();
+          const code = (prompt('3-letter code:', suggestedCode) || '').toUpperCase().slice(0,6);
+          if (!code) return;
+          await dbPut('sites', { code, name: name.trim(), usageCount: 0, lastUsedAt: null });
+        }
+      ),
+      await make('Tissues', 'tissues', 'code',
+        (s) => el('span', {}, el('span', { class: 'code' }, s.code), el('span', { style: { marginLeft: '8px' } }, s.name)),
+        async () => {
+          const name = prompt('Tissue name (e.g., Gill):'); if (!name) return;
+          const code = (prompt('Single-letter code:', name[0].toUpperCase()) || '').toUpperCase().slice(0,2);
+          if (!code) return;
+          await dbPut('tissues', { code, name: name.trim(), usageCount: 0, lastUsedAt: null });
+        }
+      ),
+      await make('Preservations', 'preservations', 'name',
+        (s) => el('span', {}, s.name),
+        async () => {
+          const name = prompt('Preservation liquid/method:'); if (!name) return;
+          await dbPut('preservations', { name: name.trim(), usageCount: 0, lastUsedAt: null });
+        }
+      ),
+      await make('Storage locations', 'storageLocations', 'name',
+        (s) => el('span', {}, s.name),
+        async () => {
+          const name = prompt('Storage location (box/freezer/shelf):'); if (!name) return;
+          await dbPut('storageLocations', { name: name.trim(), usageCount: 0, lastUsedAt: null });
+        }
+      ),
+    );
+  };
+  await render_();
+};
+
+// ---------- Projects ----------
+routes.projects = async (root) => {
+  setTitle('Projects');
+  setBack(() => navigate('#home'));
+  const redraw = async () => {
+    root.innerHTML = '';
+    const projects = await dbAll('projects');
+    const list = el('div', { class: 'list' },
+      ...projects.map(p => el('div', { class: 'card' },
+        el('div', { class: 'row' },
+          el('div', { style: { flex: 1 } },
+            el('div', { style: { fontWeight: 600, fontSize: '16px' } }, p.name),
+            el('div', { class: 'muted' }, `${(p.customFields||[]).length} custom field${(p.customFields||[]).length===1?'':'s'}`)
+          ),
+          el('button', { class: 'btn small', onclick: () => openProjectEditor(p, redraw) }, 'Edit'),
+          el('button', { class: 'btn small danger', onclick: async () => {
+            if (!confirm(`Delete project "${p.name}"? Existing samples will keep the reference.`)) return;
+            await dbDel('projects', p.id); redraw();
+          }}, 'Delete'),
+        ),
+        (p.customFields||[]).length ? el('div', { class: 'row wrap', style: { marginTop: '8px' } },
+          ...p.customFields.map(cf => el('span', { class: 'tag' }, `${cf.label}${cf.unit ? ' ['+cf.unit+']' : ''}`))
+        ) : null
+      ))
+    );
+    const addBtn = el('button', { class: 'btn primary block', onclick: () => openProjectEditor({ name: '', customFields: [] }, redraw) }, '+ New project');
+    root.append(list, addBtn);
+  };
+  redraw();
+};
+
+const openProjectEditor = (project, onDone) => {
+  showDialog(project.id ? 'Edit project' : 'New project', (dlg, close) => {
+    const name = el('input', { type: 'text', placeholder: 'Project name', value: project.name || '' });
+    const fieldsHost = el('div');
+    const customFields = [...(project.customFields || [])];
+    const drawFields = () => {
+      fieldsHost.innerHTML = '';
+      customFields.forEach((cf, i) => {
+        fieldsHost.appendChild(el('div', { class: 'tissue-row' },
+          el('span', { class: 'tissue-code' }, cf.type === 'number' ? '#' : 'T'),
+          el('div', {},
+            el('input', { type: 'text', value: cf.label, placeholder: 'Field label', oninput: (e) => cf.label = e.target.value, style: { marginBottom: '4px' } }),
+            el('div', { class: 'row' },
+              el('input', { type: 'text', value: cf.unit || '', placeholder: 'unit', oninput: (e) => cf.unit = e.target.value }),
+              el('select', { onchange: (e) => cf.type = e.target.value },
+                el('option', { value: 'text', selected: cf.type === 'text' ? '' : null }, 'Text'),
+                el('option', { value: 'number', selected: cf.type === 'number' ? '' : null }, 'Number'),
+              ),
+            )
+          ),
+          el('button', { class: 'btn small danger', onclick: () => { customFields.splice(i, 1); drawFields(); }}, '×')
+        ));
+      });
+    };
+    dlg.append(
+      el('div', { class: 'field' }, el('label', {}, 'Name'), name),
+      el('div', { class: 'field' }, el('label', {}, 'Custom fields (shown when collecting for this project)'), fieldsHost,
+        el('button', { class: 'btn block', onclick: () => {
+          customFields.push({ key: 'field_' + (customFields.length+1), label: '', type: 'number', unit: '' });
+          drawFields();
+        }}, '+ Add field')
+      ),
+      el('div', { class: 'row' },
+        el('button', { class: 'btn block ghost', onclick: close }, 'Cancel'),
+        el('button', { class: 'btn primary block', onclick: async () => {
+          if (!name.value.trim()) { showToast('Project needs a name'); return; }
+          // assign keys from labels if blank
+          customFields.forEach(cf => {
+            if (!cf.key || cf.key.startsWith('field_')) cf.key = cf.label.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'') + (cf.unit ? '_' + cf.unit : '');
+          });
+          const rec = { ...project, name: name.value.trim(), customFields, updatedAt: Date.now() };
+          if (!rec.createdAt) rec.createdAt = Date.now();
+          await dbPut('projects', rec);
+          close();
+          onDone();
+        }}, 'Save'),
+      )
+    );
+    drawFields();
+  });
+};
+
+// ---------- Google Sheets sync ----------
+const buildSheetRows = (samples, projects) => {
+  const projMap = Object.fromEntries(projects.map(p => [p.id, p]));
+  const rows = [];
+  for (const s of samples) {
+    const d = new Date(s.collectedAt);
+    const base = {
+      organism_id: s.id,
+      species_code: s.speciesCode, species_latin: s.speciesLatin || '', species_common: s.speciesCommon || '',
+      site_code: s.siteCode, site_name: s.siteName || '',
+      collector_initials: s.collectorInitials || '',
+      project: projMap[s.projectId]?.name || '',
+      collected_at_iso: d.toISOString(),
+      collected_at_date: d.toISOString().slice(0,10),
+      collected_at_time: d.toTimeString().slice(0,8),
+      latitude: s.lat != null ? Number(s.lat.toFixed(6)) : '',
+      longitude: s.lng != null ? Number(s.lng.toFixed(6)) : '',
+      gps_accuracy_m: s.gpsAccuracy != null ? Math.round(s.gpsAccuracy) : '',
+      gps_source: s.gpsSource || '',
+      photo_filenames: (s.photoFilenames || []).join(';'),
+      notes: s.notes || '',
+      created_at: new Date(s.createdAt).toISOString(),
+      updated_at: new Date(s.updatedAt).toISOString(),
+    };
+    // Custom fields go as their own columns
+    if (s.customFieldValues) for (const [k,v] of Object.entries(s.customFieldValues)) base[k] = v;
+    const tissues = s.tissues || [];
+    if (tissues.length === 0) {
+      rows.push({ ...base, sample_id: s.id, tissue_code: '', tissue_name: '', preservation: '', storage_location: '' });
+    } else {
+      for (const t of tissues) {
+        rows.push({
+          ...base,
+          sample_id: `${s.id}_${t.tissueCode}`,
+          tissue_code: t.tissueCode, tissue_name: t.tissueName || '',
+          preservation: t.preservation || '', storage_location: t.storageLocation || '',
+        });
+      }
+    }
+  }
+  return rows;
+};
+
+const syncToSheet = async ({ includeAll = false } = {}) => {
+  const url = await getSetting('syncEndpoint');
+  if (!url) throw new Error('No Sync URL set — paste your Apps Script Web App URL in Settings first.');
+  const allSamples = await dbAll('samples');
+  const pending = includeAll ? allSamples : allSamples.filter(s => s.syncStatus !== 'synced' || (s.lastSyncedAt || 0) < (s.updatedAt || 0));
+  if (!pending.length) return { ok: true, count: 0, total: allSamples.length, renamed: 0 };
+  const projects = await dbAll('projects');
+  const rows = buildSheetRows(pending, projects);
+  const body = JSON.stringify({ rows, sheetName: 'Samples', syncedAt: new Date().toISOString() });
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body, redirect: 'follow' });
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' from sync endpoint');
+  let data;
+  try { data = await res.json(); } catch { throw new Error('Sync endpoint did not return JSON. Check the Apps Script deployment.'); }
+  if (!data.ok) throw new Error(data.error || 'Sync failed on server side.');
+
+  // Apply any server-side renames from collision detection. Row sample_ids may be
+  // {organismId} or {organismId}_{tissue}. We care about the organism-level id here.
+  const renames = data.renames || {};
+  const orgRenames = {};   // oldOrgId -> newOrgId
+  for (const [oldId, newId] of Object.entries(renames)) {
+    // Strip trailing tissue code if present so we can match to the organism row.
+    const oldOrg = oldId.replace(/_[A-Z]+\d*$/, '');
+    const newOrg = newId.replace(/_[A-Z]+\d*$/, '');
+    if (!orgRenames[oldOrg]) orgRenames[oldOrg] = newOrg;
+  }
+  let renamedCount = 0;
+  for (const s of pending) {
+    const newOrgId = orgRenames[s.id];
+    if (newOrgId && newOrgId !== s.id) {
+      const oldOrgId = s.id;
+      // Rewrite photos that referenced the old organism id.
+      const photos = await dbIndexAll('photos', 'organismId', oldOrgId);
+      for (const p of photos) {
+        p.organismId = newOrgId;
+        const m = /^(.+)_(\d+)\.jpg$/i.exec(p.filename || '');
+        p.filename = m ? `${newOrgId}_${m[2]}.jpg` : `${newOrgId}_${p.seq || 1}.jpg`;
+        await dbPut('photos', p);
+      }
+      // Rewrite the sample record itself under the new key.
+      s.id = newOrgId;
+      s.organismId = newOrgId;
+      s.photoFilenames = (s.photoFilenames || []).map(f => {
+        const m = /^(.+)_(\d+)\.jpg$/i.exec(f);
+        return m ? `${newOrgId}_${m[2]}.jpg` : f;
+      });
+      s.renamedFrom = oldOrgId;
+      s.syncStatus = 'synced';
+      s.lastSyncedAt = Date.now();
+      await dbPut('samples', s);
+      await dbDel('samples', oldOrgId);
+      renamedCount++;
+    } else {
+      s.syncStatus = 'synced';
+      s.lastSyncedAt = Date.now();
+      await dbPut('samples', s);
+    }
+  }
+  return { ok: true, count: pending.length, rows: rows.length, total: allSamples.length, renamed: renamedCount };
+};
+
+// ---------- Export ----------
+routes.export = async (root) => {
+  setTitle('Export & Sync');
+  setBack(() => navigate('#home'));
+  const samples = await dbAll('samples');
+  const photos = await dbAll('photos');
+  const syncUrl = await getSetting('syncEndpoint', '');
+  const pendingCount = samples.filter(s => s.syncStatus !== 'synced' || (s.lastSyncedAt || 0) < (s.updatedAt || 0)).length;
+
+  const syncBtn = el('button', { class: 'btn primary block', disabled: syncUrl ? null : '' , onclick: async () => {
+    syncBtn.disabled = true;
+    syncBtn.textContent = 'Syncing…';
+    try {
+      const r = await syncToSheet();
+      let msg;
+      if (r.count === 0) msg = 'Already up to date';
+      else if (r.renamed) msg = `Synced ${r.count} · renamed ${r.renamed} to resolve collision${r.renamed===1?'':'s'}`;
+      else msg = `Synced ${r.count} sample${r.count===1?'':'s'} → Google Sheet`;
+      showToast(msg);
+    } catch (e) {
+      alert('Sync failed: ' + e.message);
+    } finally {
+      render();
+    }
+  }}, syncUrl ? `⤴ Sync ${pendingCount} pending to Google Sheet` : 'Sync (set a Sync URL in Settings first)');
+
+  root.append(
+    el('div', { class: 'card' },
+      el('h2', {}, 'Google Sheet sync'),
+      syncBtn,
+      el('div', { class: 'muted', style: { marginTop: '6px' } },
+        syncUrl
+          ? `${pendingCount} of ${samples.length} organism records are unsynced. Sync is additive and upsert-safe (re-syncing a record updates it in place).`
+          : 'One-time setup: deploy apps-script.gs to a Google Sheet (see README), copy the Web App URL, paste it in Settings → Sync URL.'
+      ),
+      el('button', { class: 'btn block ghost', style: { marginTop: '8px' }, onclick: () => navigate('#settings') }, 'Open Settings'),
+    ),
+    el('div', { class: 'card' },
+      el('h2', {}, 'Local downloads'),
+      el('p', {}, `You have ${samples.length} organism records and ${photos.length} photos on this phone.`),
+      el('button', { class: 'btn block', onclick: () => exportCSV(samples) }, '⤓ Download CSV (one row per tissue)'),
+      el('button', { class: 'btn block', style: { marginTop: '8px' }, onclick: () => exportSamplesJSON(samples) }, '⤓ Download JSON backup'),
+    ),
+    el('div', { class: 'card' },
+      el('h2', {}, 'Photos'),
+      el('p', {}, `Bundle all ${photos.length} photo${photos.length===1?'':'s'} into a single ZIP with a /thumbnails folder and a photos.csv manifest. Download over Wi-Fi, then drag onto your external hard drive.`),
+      (() => {
+        const btn = el('button', { class: 'btn primary block', disabled: photos.length ? null : '', onclick: async () => {
+          btn.disabled = true;
+          const origText = btn.textContent;
+          btn.textContent = 'Preparing ZIP…';
+          try {
+            const r = await exportPhotosZip((i, total, name) => {
+              btn.textContent = `Zipping ${i+1}/${total}… ${name}`;
+            });
+            if (r) {
+              const mb = (r.bytes / (1024*1024)).toFixed(1);
+              showToast(`ZIP ready (${mb} MB, ${r.photos} photo${r.photos===1?'':'s'})`);
+            }
+          } catch (e) {
+            alert('ZIP failed: ' + e.message);
+          } finally {
+            btn.disabled = photos.length ? null : '';
+            btn.textContent = origText;
+          }
+        }}, `⤓ Export ZIP (${photos.length} photo${photos.length===1?'':'s'} + thumbnails)`);
+        return btn;
+      })(),
+      el('button', { class: 'btn block ghost', style: { marginTop: '8px' }, onclick: () => downloadAllPhotos() }, `Or download each photo separately`),
+    ),
+    el('div', { class: 'card' },
+      el('h2', {}, 'Danger zone'),
+      el('button', { class: 'btn danger block', onclick: async () => {
+        if (!confirm('Wipe ALL local data? Export first!')) return;
+        for (const s of STORES) await dbClear(s);
+        await setSetting('seeded', false);
+        await initSeed();
+        showToast('Reset');
+        navigate('#onboarding');
+      }}, '🗑 Wipe all local data'),
+    )
+  );
+};
+
+const csvEscape = (v) => {
+  if (v == null) return '';
+  const s = String(v);
+  if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+};
+
+const exportCSV = async (samples) => {
+  // One row per tissue, or one row per organism if no tissues.
+  const projects = await dbAll('projects');
+  const projMap = Object.fromEntries(projects.map(p => [p.id, p]));
+  // Collect all custom field keys used
+  const allCfKeys = new Set();
+  for (const s of samples) for (const k of Object.keys(s.customFieldValues || {})) allCfKeys.add(k);
+  const cfHeaders = Array.from(allCfKeys);
+
+  const base = ['sample_id','organism_id','tissue_code','tissue_name','preservation','storage_location',
+    'species_code','species_latin','species_common','site_code','site_name',
+    'collector_initials','project','collected_at_iso','collected_at_date','collected_at_time',
+    'latitude','longitude','gps_accuracy_m','photo_filenames','notes','created_at','updated_at'];
+  const headers = [...base, ...cfHeaders];
+  const lines = [headers.join(',')];
+  const addRow = (s, t) => {
+    const d = new Date(s.collectedAt);
+    const row = [
+      t ? `${s.id}_${t.tissueCode}` : s.id,
+      s.id,
+      t ? t.tissueCode : '',
+      t ? t.tissueName : '',
+      t ? t.preservation : '',
+      t ? (t.storageLocation || '') : '',
+      s.speciesCode, s.speciesLatin, s.speciesCommon || '',
+      s.siteCode, s.siteName || '',
+      s.collectorInitials || '',
+      projMap[s.projectId]?.name || '',
+      d.toISOString(),
+      d.toISOString().slice(0,10),
+      d.toTimeString().slice(0,8),
+      s.lat != null ? s.lat.toFixed(6) : '',
+      s.lng != null ? s.lng.toFixed(6) : '',
+      s.gpsAccuracy != null ? Math.round(s.gpsAccuracy) : '',
+      (s.photoFilenames || []).join(';'),
+      s.notes || '',
+      new Date(s.createdAt).toISOString(),
+      new Date(s.updatedAt).toISOString(),
+      ...cfHeaders.map(k => s.customFieldValues?.[k] ?? ''),
+    ];
+    lines.push(row.map(csvEscape).join(','));
+  };
+  for (const s of samples) {
+    if (s.tissues && s.tissues.length) for (const t of s.tissues) addRow(s, t);
+    else addRow(s, null);
+  }
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  downloadBlob(blob, `samples_${new Date().toISOString().slice(0,10)}.csv`);
+};
+
+const exportSamplesJSON = async (samples) => {
+  const all = { samples, projects: await dbAll('projects'), species: await dbAll('species'), sites: await dbAll('sites'), tissues: await dbAll('tissues'), preservations: await dbAll('preservations'), storageLocations: await dbAll('storageLocations'), exportedAt: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(all, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, `samplecollector_backup_${new Date().toISOString().slice(0,10)}.json`);
+};
+
+const downloadAllPhotos = async () => {
+  const photos = await dbAll('photos');
+  if (!photos.length) { showToast('No photos to download'); return; }
+  // On iOS, repeated programmatic downloads are flaky; do them sequentially with a short delay.
+  for (const p of photos) {
+    downloadBlob(p.fullBlob, p.filename);
+    await new Promise(r => setTimeout(r, 400));
+  }
+  showToast(`Started ${photos.length} downloads`);
+};
+
+// ---------- ZIP export (stored / uncompressed, pure JS, no library) ----------
+const _crc32Table = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+const crc32 = (u8) => {
+  let c = 0xffffffff;
+  for (let i = 0; i < u8.length; i++) c = _crc32Table[(c ^ u8[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+};
+// entries: [{ name: 'photos/foo.jpg', data: Uint8Array }, ...]
+const makeZip = async (entries) => {
+  const enc = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  const d = new Date();
+  const dosTime = ((d.getHours() & 0x1f) << 11) | ((d.getMinutes() & 0x3f) << 5) | ((d.getSeconds() >> 1) & 0x1f);
+  const dosDate = (((d.getFullYear() - 1980) & 0x7f) << 9) | (((d.getMonth() + 1) & 0xf) << 5) | (d.getDate() & 0x1f);
+  for (const e of entries) {
+    const name = enc.encode(e.name);
+    const crc = crc32(e.data);
+    const size = e.data.length;
+    const lfh = new Uint8Array(30 + name.length);
+    const dv = new DataView(lfh.buffer);
+    dv.setUint32(0, 0x04034b50, true);
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, 0x0800, true);   // UTF-8 filenames
+    dv.setUint16(8, 0, true);        // method: stored
+    dv.setUint16(10, dosTime, true);
+    dv.setUint16(12, dosDate, true);
+    dv.setUint32(14, crc, true);
+    dv.setUint32(18, size, true);
+    dv.setUint32(22, size, true);
+    dv.setUint16(26, name.length, true);
+    dv.setUint16(28, 0, true);
+    lfh.set(name, 30);
+    parts.push(lfh, e.data);
+    central.push({ name, crc, size, offset, dosTime, dosDate });
+    offset += lfh.length + size;
+  }
+  const cdStart = offset;
+  for (const c of central) {
+    const cde = new Uint8Array(46 + c.name.length);
+    const dv = new DataView(cde.buffer);
+    dv.setUint32(0, 0x02014b50, true);
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, 20, true);
+    dv.setUint16(8, 0x0800, true);
+    dv.setUint16(10, 0, true);
+    dv.setUint16(12, c.dosTime, true);
+    dv.setUint16(14, c.dosDate, true);
+    dv.setUint32(16, c.crc, true);
+    dv.setUint32(20, c.size, true);
+    dv.setUint32(24, c.size, true);
+    dv.setUint16(28, c.name.length, true);
+    dv.setUint16(30, 0, true);
+    dv.setUint16(32, 0, true);
+    dv.setUint16(34, 0, true);
+    dv.setUint16(36, 0, true);
+    dv.setUint32(38, 0, true);
+    dv.setUint32(42, c.offset, true);
+    cde.set(c.name, 46);
+    parts.push(cde);
+    offset += cde.length;
+  }
+  const cdSize = offset - cdStart;
+  const eocd = new Uint8Array(22);
+  const edv = new DataView(eocd.buffer);
+  edv.setUint32(0, 0x06054b50, true);
+  edv.setUint16(4, 0, true);
+  edv.setUint16(6, 0, true);
+  edv.setUint16(8, central.length, true);
+  edv.setUint16(10, central.length, true);
+  edv.setUint32(12, cdSize, true);
+  edv.setUint32(16, cdStart, true);
+  edv.setUint16(20, 0, true);
+  parts.push(eocd);
+  return new Blob(parts, { type: 'application/zip' });
+};
+
+// Re-encode a blob as a smaller JPEG thumbnail if one isn't cached yet.
+const makeJpegThumb = async (blob, maxEdge = 480, quality = 0.6) => {
+  try {
+    const bmp = await createImageBitmap(blob);
+    const scale = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = (typeof OffscreenCanvas !== 'undefined') ? new OffscreenCanvas(w, h) : Object.assign(document.createElement('canvas'), { width: w, height: h });
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bmp, 0, 0, w, h);
+    if (canvas.convertToBlob) return await canvas.convertToBlob({ type: 'image/jpeg', quality });
+    return await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+  } catch (e) {
+    return null;
+  }
+};
+
+const exportPhotosZip = async (progressCb) => {
+  const photos = await dbAll('photos');
+  if (!photos.length) { showToast('No photos to export'); return; }
+  const samples = await dbAll('samples');
+  const byOrg = Object.fromEntries(samples.map(s => [s.id, s]));
+
+  const entries = [];
+  const manifestRows = [
+    ['filename','sample_id','collector_initials','species_code','site_code','collected_at_iso','latitude','longitude','gps_accuracy_m'].join(',')
+  ];
+
+  for (let i = 0; i < photos.length; i++) {
+    const p = photos[i];
+    if (progressCb) progressCb(i, photos.length, p.filename);
+    const fullBuf = new Uint8Array(await p.fullBlob.arrayBuffer());
+    entries.push({ name: `photos/${p.filename}`, data: fullBuf });
+    let thumbBlob = p.thumbBlob;
+    if (!thumbBlob) thumbBlob = await makeJpegThumb(p.fullBlob);
+    if (thumbBlob) {
+      const thumbBuf = new Uint8Array(await thumbBlob.arrayBuffer());
+      entries.push({ name: `thumbnails/${p.filename}`, data: thumbBuf });
+    }
+    const s = byOrg[p.organismId];
+    manifestRows.push([
+      p.filename,
+      p.organismId,
+      s?.collectorInitials || '',
+      s?.speciesCode || '',
+      s?.siteCode || '',
+      s ? new Date(s.collectedAt).toISOString() : '',
+      s?.lat != null ? s.lat.toFixed(6) : '',
+      s?.lng != null ? s.lng.toFixed(6) : '',
+      s?.gpsAccuracy != null ? Math.round(s.gpsAccuracy) : '',
+    ].map(csvEscape).join(','));
+  }
+  entries.push({ name: 'photos.csv', data: new TextEncoder().encode(manifestRows.join('\n')) });
+  entries.push({ name: 'README.txt', data: new TextEncoder().encode(
+    'Sample Collector photo archive\n' +
+    '==============================\n\n' +
+    'photos/          full-resolution JPEGs as captured in the field\n' +
+    'thumbnails/      reduced-quality previews (max 480px edge, ~60% quality)\n' +
+    'photos.csv       manifest mapping each filename to sample_id, collector, timestamp, GPS\n\n' +
+    'Filenames follow {SPECIES}_{SITE}_{MMDDNN}_{sequence}.jpg\n' +
+    `Exported ${new Date().toISOString()} by ${navigator.userAgent.includes('iPhone') ? 'iPhone' : 'browser'}\n`
+  )});
+
+  const zipBlob = await makeZip(entries);
+  const stamp = new Date().toISOString().slice(0,10);
+  downloadBlob(zipBlob, `samplecollector_photos_${stamp}.zip`);
+  return { photos: photos.length, bytes: zipBlob.size };
+};
+
+const downloadBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 2000);
+};
+
+// ---------- Settings ----------
+routes.settings = async (root) => {
+  setTitle('Settings');
+  setBack(() => navigate('#home'));
+  const personId = await getSetting('currentPersonId');
+  const people = await dbAll('people');
+  const teamPasscode = await getSetting('teamPasscode', 'field');
+  const current = people.find(p => p.id === personId);
+
+  const passIn = el('input', { type: 'text', value: teamPasscode });
+  passIn.addEventListener('change', async () => { await setSetting('teamPasscode', passIn.value.trim()); showToast('Passcode saved'); });
+
+  const syncIn = el('input', { type: 'url', placeholder: 'https://script.google.com/macros/s/…/exec', autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false', value: await getSetting('syncEndpoint', '') });
+  syncIn.addEventListener('change', async () => { await setSetting('syncEndpoint', syncIn.value.trim()); showToast('Sync URL saved'); });
+  const testSyncBtn = el('button', { class: 'btn', onclick: async () => {
+    if (!syncIn.value.trim()) { showToast('Paste a URL first'); return; }
+    try {
+      const r = await fetch(syncIn.value.trim(), { method: 'GET' });
+      const data = await r.json();
+      alert(data.message || (data.ok ? 'Endpoint is live.' : 'Response: ' + JSON.stringify(data)));
+    } catch(e) {
+      alert('Test failed: ' + e.message + '\n\nIf you see a CORS or opaque error, re-deploy the Apps Script as "Anyone" access.');
+    }
+  }}, 'Test connection');
+
+  const peopleHost = el('div');
+  const drawPeople = () => {
+    peopleHost.innerHTML = '';
+    for (const p of people) {
+      const row = el('div', { class: 'row', style: { padding: '8px 0', borderBottom: '1px solid var(--border)' } },
+        el('div', { style: { flex: 1 } },
+          el('div', { style: { fontWeight: 600 } }, p.name),
+          el('span', { class: 'code' }, p.initials),
+        ),
+        p.id === personId ? el('span', { class: 'pill accent' }, 'Active') : el('button', { class: 'btn small', onclick: async () => {
+          await setSetting('currentPersonId', p.id);
+          showToast(`Switched to ${p.name}`);
+          render();
+        }}, 'Use this name'),
+        el('button', { class: 'btn small danger', onclick: async () => {
+          if (!confirm(`Remove ${p.name}?`)) return;
+          await dbDel('people', p.id);
+          const idx = people.findIndex(x => x.id === p.id); if (idx>=0) people.splice(idx,1);
+          drawPeople();
+        }}, 'Remove'),
+      );
+      peopleHost.appendChild(row);
+    }
+  };
+  drawPeople();
+
+  const addName = el('input', { type: 'text', placeholder: 'Name' });
+  const addInit = el('input', { type: 'text', placeholder: 'Initials', maxlength: '4' });
+  addName.addEventListener('input', () => { if (!addInit.value) addInit.value = addName.value.split(/\s+/).filter(Boolean).map(p=>p[0]).join('').toUpperCase().slice(0,3); });
+  const addBtn = el('button', { class: 'btn', onclick: async () => {
+    if (!addName.value.trim() || !addInit.value.trim()) { showToast('Name and initials required'); return; }
+    const id = await dbPut('people', { name: addName.value.trim(), initials: addInit.value.toUpperCase() });
+    people.push({ id, name: addName.value.trim(), initials: addInit.value.toUpperCase() });
+    addName.value = ''; addInit.value = '';
+    drawPeople();
+  }}, '+ Add');
+
+  root.append(
+    el('div', { class: 'card' },
+      el('h2', {}, 'Active collector'),
+      el('div', { style: { fontSize: '16px', fontWeight: 600 } }, current ? `${current.name} (${current.initials})` : '—'),
+    ),
+    el('div', { class: 'card' },
+      el('h2', {}, 'Team members (on this device)'),
+      peopleHost,
+      el('div', { class: 'row', style: { marginTop: '8px' } }, addName, addInit, addBtn)
+    ),
+    el('div', { class: 'card' },
+      el('h2', {}, 'Team passcode'),
+      el('p', { class: 'muted' }, 'Shared code the whole team uses. Used to tag syncs (enforced at sync time, coming soon).'),
+      passIn
+    ),
+    el('div', { class: 'card' },
+      el('h2', {}, 'Google Sheet sync URL'),
+      el('p', { class: 'muted' }, 'Paste the Apps Script Web App URL here (see README for setup). Every device uses the same URL to write to the shared sheet.'),
+      syncIn,
+      el('div', { style: { marginTop: '8px' } }, testSyncBtn)
+    ),
+    el('div', { class: 'card' },
+      el('h2', {}, 'About'),
+      el('p', {}, 'Sample Collector v0.2 · offline-first PWA · data lives on this phone until you export or sync.'),
+    ),
+  );
+};
+
+// ---------- Init ----------
+(async () => {
+  try {
+    DB = await idbOpen();
+    await initSeed();
+    render();
+  } catch (e) {
+    document.body.innerHTML = '<p style="padding:20px">Database error: ' + e.message + '</p>';
+    console.error(e);
+  }
+})();
+</script>
+</body>
+</html>
