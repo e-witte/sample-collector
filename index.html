@@ -94,9 +94,19 @@
   /* Browse cloud filter chips */
   .filter-row { margin-top: 10px; }
   .filter-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
-  .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .filter-chip { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 13px; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
+  .filter-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 180px; overflow-y: auto; padding: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; -webkit-overflow-scrolling: touch; }
+  .filter-chip { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 13px; padding: 4px 10px; border-radius: 999px; cursor: pointer; line-height: 1.3; }
   .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .filter-chip .chip-sub { font-size: 11px; color: var(--muted); margin-left: 6px; }
+  .filter-chip.active .chip-sub { color: rgba(255,255,255,.85); }
+  .filter-search { width: 100%; box-sizing: border-box; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 14px; }
+  .filter-empty { color: var(--muted); font-size: 12px; padding: 8px; }
+  .n-counter { display: inline-block; font-family: ui-monospace, Menlo, monospace; font-size: 18px; font-weight: 700; background: var(--accent); color: #fff; padding: 4px 12px; border-radius: 999px; }
+  /* Project-editor field suggestions */
+  .suggestion-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .suggestion-chip { display: inline-flex; align-items: center; gap: 4px; background: var(--surface-2); border: 1px dashed var(--accent); color: var(--text); font-size: 13px; padding: 4px 10px; border-radius: 999px; cursor: pointer; }
+  .suggestion-chip .suggestion-add { color: var(--accent); font-weight: 700; }
+  .suggestion-chip .suggestion-count { font-size: 11px; color: var(--muted); margin-left: 2px; }
   /* Sync overlay: test-tube rises from bottom, meets cloud at top, they orbit + fade. */
   .sync-overlay { position: fixed; inset: 0; z-index: 50; pointer-events: none; background: radial-gradient(circle at 50% 40%, rgba(179,229,252,.45), rgba(179,229,252,0) 70%); opacity: 0; animation: syncFade .3s ease-out forwards; }
   .sync-overlay .sync-stage { position: absolute; inset: 0; }
@@ -1578,45 +1588,137 @@ routes.projects = async (root) => {
   redraw();
 };
 
+// Normalize a label+unit pair into the Google-Sheet column key. Same algorithm
+// the editor uses on Save — exposed here so that "suggested fields" can reuse
+// the exact same key as the original and land in the same sheet column.
+const customFieldKey = (label, unit) => {
+  const slug = (label || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return slug + (unit ? '_' + unit : '');
+};
+
+// Scan every project for previously-used custom fields so we can suggest them
+// when editing a project. Deduplicated by generated key so that two projects
+// using "Standard length (mm)" merge into one suggestion — and so tapping it
+// reuses the existing column on the Google Sheet instead of making a new one.
+const collectFieldSuggestions = async () => {
+  const projects = await dbAll('projects');
+  const byKey = new Map();     // key -> { key, label, unit, type, usageCount }
+  for (const p of projects) {
+    for (const cf of (p.customFields || [])) {
+      if (!cf.label) continue;
+      const key = cf.key || customFieldKey(cf.label, cf.unit);
+      const existing = byKey.get(key);
+      if (existing) {
+        existing.usageCount++;
+      } else {
+        byKey.set(key, {
+          key,
+          label: cf.label,
+          unit: cf.unit || '',
+          type: cf.type || 'text',
+          usageCount: 1,
+        });
+      }
+    }
+  }
+  // Most-used first, then alphabetical.
+  return Array.from(byKey.values()).sort((a, b) =>
+    b.usageCount - a.usageCount || a.label.localeCompare(b.label)
+  );
+};
+
 const openProjectEditor = (project, onDone) => {
-  showDialog(project.id ? 'Edit project' : 'New project', (dlg, close) => {
+  showDialog(project.id ? 'Edit project' : 'New project', async (dlg, close) => {
     const name = el('input', { type: 'text', placeholder: 'Project name', value: project.name || '' });
     const fieldsHost = el('div');
     const customFields = [...(project.customFields || [])];
+
+    // Backfill keys on any pre-existing fields so equality checks work.
+    customFields.forEach(cf => {
+      if (!cf.key || cf.key.startsWith('field_')) cf.key = customFieldKey(cf.label, cf.unit);
+    });
+
+    const suggestions = await collectFieldSuggestions();
+    const suggestionHost = el('div', { class: 'suggestion-chips' });
+
+    const isFieldActive = (sug) => customFields.some(cf => (cf.key || customFieldKey(cf.label, cf.unit)) === sug.key);
+
+    const drawSuggestions = () => {
+      suggestionHost.innerHTML = '';
+      const available = suggestions.filter(s => !isFieldActive(s));
+      if (!available.length) {
+        if (suggestions.length) {
+          suggestionHost.appendChild(el('div', { class: 'muted', style: { fontSize: '12px' } }, 'All previously-used fields are already on this project.'));
+        } else {
+          suggestionHost.appendChild(el('div', { class: 'muted', style: { fontSize: '12px' } }, 'No previously-used fields yet. As you save projects, common fields will show up here to tap and re-use.'));
+        }
+        return;
+      }
+      available.forEach(s => {
+        const label = `${s.label}${s.unit ? ' (' + s.unit + ')' : ''}`;
+        const chip = el('button', {
+          class: 'suggestion-chip',
+          title: `Reuses Sheet column "${s.key}" · used in ${s.usageCount} project${s.usageCount === 1 ? '' : 's'}`,
+          onclick: () => {
+            customFields.push({ key: s.key, label: s.label, unit: s.unit || '', type: s.type || 'text' });
+            drawFields();
+            drawSuggestions();
+          }
+        },
+          el('span', { class: 'suggestion-add' }, '+'),
+          el('span', {}, label),
+          s.usageCount > 1 ? el('span', { class: 'suggestion-count' }, '×' + s.usageCount) : null,
+        );
+        suggestionHost.appendChild(chip);
+      });
+    };
+
     const drawFields = () => {
       fieldsHost.innerHTML = '';
+      if (!customFields.length) {
+        fieldsHost.appendChild(el('div', { class: 'muted', style: { fontSize: '13px', padding: '4px 0' } }, 'No custom fields yet.'));
+      }
       customFields.forEach((cf, i) => {
-        fieldsHost.appendChild(el('div', { class: 'tissue-row' },
+        const row = el('div', { class: 'tissue-row' },
           el('span', { class: 'tissue-code' }, cf.type === 'number' ? '#' : 'T'),
           el('div', {},
-            el('input', { type: 'text', value: cf.label, placeholder: 'Field label', oninput: (e) => cf.label = e.target.value, style: { marginBottom: '4px' } }),
+            el('input', { type: 'text', value: cf.label, placeholder: 'Field label', oninput: (e) => { cf.label = e.target.value; cf.key = customFieldKey(cf.label, cf.unit); }, style: { marginBottom: '4px' } }),
             el('div', { class: 'row' },
-              el('input', { type: 'text', value: cf.unit || '', placeholder: 'unit', oninput: (e) => cf.unit = e.target.value }),
+              el('input', { type: 'text', value: cf.unit || '', placeholder: 'unit', oninput: (e) => { cf.unit = e.target.value; cf.key = customFieldKey(cf.label, cf.unit); } }),
               el('select', { onchange: (e) => cf.type = e.target.value },
                 el('option', { value: 'text', selected: cf.type === 'text' ? '' : null }, 'Text'),
                 el('option', { value: 'number', selected: cf.type === 'number' ? '' : null }, 'Number'),
               ),
             )
           ),
-          el('button', { class: 'btn small danger', onclick: () => { customFields.splice(i, 1); drawFields(); }}, '×')
-        ));
+          el('button', { class: 'btn small danger', onclick: () => { customFields.splice(i, 1); drawFields(); drawSuggestions(); }}, '×')
+        );
+        fieldsHost.appendChild(row);
       });
     };
+
     dlg.append(
       el('div', { class: 'field' }, el('label', {}, 'Name'), name),
-      el('div', { class: 'field' }, el('label', {}, 'Custom fields (shown when collecting for this project)'), fieldsHost,
-        el('button', { class: 'btn block', onclick: () => {
+      el('div', { class: 'field' },
+        el('label', {}, 'Custom fields (shown when collecting for this project)'),
+        fieldsHost,
+        el('button', { class: 'btn block', style: { marginTop: '6px' }, onclick: () => {
           customFields.push({ key: 'field_' + (customFields.length+1), label: '', type: 'number', unit: '' });
           drawFields();
-        }}, '+ Add field')
+        }}, '+ Add blank field')
+      ),
+      el('div', { class: 'field' },
+        el('label', {}, 'Or tap a previously-used field'),
+        el('div', { class: 'muted', style: { fontSize: '12px', marginBottom: '6px' } }, 'Suggested fields reuse the same Google Sheet column, so data stays in one place.'),
+        suggestionHost
       ),
       el('div', { class: 'row' },
         el('button', { class: 'btn block ghost', onclick: close }, 'Cancel'),
         el('button', { class: 'btn primary block', onclick: async () => {
           if (!name.value.trim()) { showToast('Project needs a name'); return; }
-          // assign keys from labels if blank
+          // Finalize keys for any fields the user typed into freshly.
           customFields.forEach(cf => {
-            if (!cf.key || cf.key.startsWith('field_')) cf.key = cf.label.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'') + (cf.unit ? '_' + cf.unit : '');
+            if (!cf.key || cf.key.startsWith('field_')) cf.key = customFieldKey(cf.label, cf.unit);
           });
           const rec = { ...project, name: name.value.trim(), customFields, updatedAt: Date.now() };
           if (!rec.createdAt) rec.createdAt = Date.now();
@@ -1627,6 +1729,7 @@ const openProjectEditor = (project, onDone) => {
       )
     );
     drawFields();
+    drawSuggestions();
   });
 };
 
@@ -1805,10 +1908,22 @@ const syncToSheet = async ({ includeAll = false } = {}) => {
   }
 
   // Merge back any new species/sites/tissues/preservations/storage/projects the
-  // team has added from other phones.
-  const mergeReport = await mergeReferenceLists(data.referenceLists);
+  // team has added from other phones. If the server didn't return a
+  // `referenceLists` key at all, the deployed Apps Script is an older version
+  // that doesn't know how to write those tabs — surface that so the collector
+  // isn't left wondering why teammates' species never show up.
+  const serverSupportsLists = data && Object.prototype.hasOwnProperty.call(data, 'referenceLists');
+  const mergeReport = serverSupportsLists ? await mergeReferenceLists(data.referenceLists) : { added: 0 };
 
-  return { ok: true, count: pending.length, rows: rows.length, total: allSamples.length, renamed: renamedCount, listsAdded: mergeReport.added };
+  return {
+    ok: true,
+    count: pending.length,
+    rows: rows.length,
+    total: allSamples.length,
+    renamed: renamedCount,
+    listsAdded: mergeReport.added,
+    serverSupportsLists,
+  };
 };
 
 // ---------- Browse cloud (read the Google Sheet back into the app) ----------
@@ -1838,6 +1953,7 @@ routes.browse = async (root) => {
   const fresh = _browseCache.data && (Date.now() - _browseCache.ts) < BROWSE_CACHE_MS;
   let rows = [];
   let loadError = null;
+  let staleDeployment = false;   // true when the GET came back without a `rows` field
   try {
     if (fresh) {
       rows = _browseCache.data;
@@ -1847,9 +1963,17 @@ routes.browse = async (root) => {
       const res = await fetch(syncUrl + (syncUrl.includes('?') ? '&' : '?') + 'action=samples', { method: 'GET', redirect: 'follow' });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'Server returned no data');
-      rows = data.rows || [];
-      _browseCache.data = rows;
-      _browseCache.ts = Date.now();
+      // If the deployed Apps Script is the old version, its doGet ignores
+      // ?action=samples and just returns the liveness payload (no `rows` key).
+      // Tell the user to redeploy rather than silently showing "empty".
+      if (!Array.isArray(data.rows)) {
+        staleDeployment = true;
+        rows = [];
+      } else {
+        rows = data.rows;
+        _browseCache.data = rows;
+        _browseCache.ts = Date.now();
+      }
     }
   } catch (e) {
     loadError = e;
@@ -1865,10 +1989,21 @@ routes.browse = async (root) => {
     return;
   }
 
+  if (staleDeployment) {
+    root.appendChild(el('div', { class: 'card' },
+      el('h2', {}, 'Apps Script needs a redeploy'),
+      el('p', {}, 'Your Google Sheet replied, but without the data endpoint. That means the deployed Apps Script is the old version — saving the file in the editor does not update what the URL serves.'),
+      el('p', { class: 'muted' }, 'Fix: open Apps Script on the sheet → Deploy → Manage deployments → pencil on the active one → Version: New version → Deploy. Keep the same deployment so the URL does not change.'),
+      el('button', { class: 'btn primary block', onclick: () => { _browseCache.ts = 0; _browseCache.data = null; requestRender(); } }, 'Retry after redeploy')
+    ));
+    return;
+  }
+
   if (!rows.length) {
     root.appendChild(el('div', { class: 'card' },
       el('h2', {}, 'Cloud is empty'),
-      el('p', { class: 'muted' }, 'No rows have been synced to the shared Google Sheet yet.')
+      el('p', { class: 'muted' }, 'The endpoint responded, but the Samples tab has no rows yet. Sync a sample from any phone and retry.'),
+      el('button', { class: 'btn primary block', onclick: () => { _browseCache.ts = 0; _browseCache.data = null; requestRender(); } }, 'Retry')
     ));
     return;
   }
@@ -1887,14 +2022,29 @@ routes.browse = async (root) => {
   }
   const organismList = Object.values(organisms);
 
-  // Filter dimensions
-  const uniq = (key) => Array.from(new Set(organismList.map(r => r[key]).filter(v => v != null && v !== ''))).sort();
-  const species = uniq('species_code');
-  const sites = uniq('site_code');
-  const collectors = uniq('collector_initials');
-  const projects = uniq('project');
+  // Build filter dimensions. Each entry is { value (what we filter by), label (what we show), sub (small-caps helper) }.
+  // Species: show full Latin binomial. Sites: show full name. Collector: show initials. Project: show project name.
+  const uniqueByValue = (mapper) => {
+    const seen = new Map();
+    for (const r of organismList) {
+      const entry = mapper(r);
+      if (!entry || entry.value == null || entry.value === '') continue;
+      const k = String(entry.value);
+      if (!seen.has(k)) seen.set(k, entry);
+    }
+    return Array.from(seen.values()).sort((a, b) => String(a.label).localeCompare(String(b.label)));
+  };
+  const speciesOpts = uniqueByValue(r => r.species_latin
+    ? { value: r.species_code || r.species_latin, label: r.species_latin, sub: r.species_common || r.species_code || '' }
+    : (r.species_code ? { value: r.species_code, label: r.species_code, sub: '' } : null));
+  const siteOpts = uniqueByValue(r => r.site_name
+    ? { value: r.site_code || r.site_name, label: r.site_name, sub: r.site_code || '' }
+    : (r.site_code ? { value: r.site_code, label: r.site_code, sub: '' } : null));
+  const collectorOpts = uniqueByValue(r => r.collector_initials ? { value: r.collector_initials, label: r.collector_initials, sub: '' } : null);
+  const projectOpts = uniqueByValue(r => r.project ? { value: r.project, label: r.project, sub: '' } : null);
 
-  // Filter state
+  // Filter state: `value`-keyed Sets so selection survives the chip list being
+  // re-rendered as the user types in the per-filter search box.
   const filters = {
     species: new Set(),
     site: new Set(),
@@ -1904,21 +2054,64 @@ routes.browse = async (root) => {
     toDate: '',
   };
 
-  const makeChipRow = (label, values, setRef) => {
-    const chips = values.map(v => {
-      const chip = el('button', {
-        class: 'filter-chip',
-        onclick: () => {
-          if (setRef.has(v)) setRef.delete(v); else setRef.add(v);
-          chip.classList.toggle('active', setRef.has(v));
-          renderList();
-        }
-      }, String(v));
-      return chip;
+  const listHost = el('div', { class: 'card' });
+
+  // Per-filter chip group: label + search input + scrollable chip list.
+  // Typing narrows the chip list to matching entries; selected chips always
+  // stay visible at the top so the collector never "loses" a selection.
+  const makeFilterGroup = (labelText, options, setRef) => {
+    const chipHost = el('div', { class: 'filter-chips' });
+    const search = el('input', {
+      class: 'filter-search',
+      type: 'search',
+      placeholder: `Search ${labelText.toLowerCase()}…`,
+      autocomplete: 'off',
+      autocorrect: 'off',
+      autocapitalize: 'none',
+      spellcheck: 'false',
     });
+    const redraw = () => {
+      const q = search.value.trim().toLowerCase();
+      chipHost.innerHTML = '';
+      const visible = options.filter(opt => {
+        if (setRef.has(opt.value)) return true;   // always keep selected chips visible
+        if (!q) return true;
+        return String(opt.label).toLowerCase().includes(q)
+            || String(opt.sub || '').toLowerCase().includes(q);
+      });
+      // Selected first, then alphabetical by label
+      visible.sort((a, b) => {
+        const sa = setRef.has(a.value) ? 0 : 1;
+        const sb = setRef.has(b.value) ? 0 : 1;
+        if (sa !== sb) return sa - sb;
+        return String(a.label).localeCompare(String(b.label));
+      });
+      if (!visible.length) {
+        chipHost.appendChild(el('div', { class: 'filter-empty' }, 'No matches.'));
+        return;
+      }
+      visible.forEach(opt => {
+        const chip = el('button', {
+          class: 'filter-chip' + (setRef.has(opt.value) ? ' active' : ''),
+          onclick: () => {
+            if (setRef.has(opt.value)) setRef.delete(opt.value);
+            else setRef.add(opt.value);
+            chip.classList.toggle('active', setRef.has(opt.value));
+            renderList();
+          }
+        },
+          el('span', {}, opt.label),
+          opt.sub ? el('span', { class: 'chip-sub' }, opt.sub) : null,
+        );
+        chipHost.appendChild(chip);
+      });
+    };
+    search.addEventListener('input', redraw);
+    redraw();
     return el('div', { class: 'filter-row' },
-      el('div', { class: 'filter-label' }, label),
-      el('div', { class: 'filter-chips' }, ...chips)
+      el('div', { class: 'filter-label' }, `${labelText} (${options.length})`),
+      search,
+      chipHost
     );
   };
 
@@ -1934,11 +2127,19 @@ routes.browse = async (root) => {
     _browseCache.ts = 0; _browseCache.data = null; requestRender();
   }}, '↻ Refresh');
 
-  const listHost = el('div', { class: 'card' });
-
+  // Filters operate on the canonical value stored in the options (species_code
+  // for species, site_code for sites, etc.). The chip label is Latin/full-name
+  // for readability, but the underlying filter still matches whatever key we
+  // chose when building the option list.
   const passesFilter = (r) => {
-    if (filters.species.size && !filters.species.has(r.species_code)) return false;
-    if (filters.site.size && !filters.site.has(r.site_code)) return false;
+    if (filters.species.size) {
+      const v = r.species_code || r.species_latin || '';
+      if (!filters.species.has(v)) return false;
+    }
+    if (filters.site.size) {
+      const v = r.site_code || r.site_name || '';
+      if (!filters.site.has(v)) return false;
+    }
     if (filters.collector.size && !filters.collector.has(r.collector_initials)) return false;
     if (filters.project.size && !filters.project.has(r.project)) return false;
     if (filters.fromDate || filters.toDate) {
@@ -1953,13 +2154,17 @@ routes.browse = async (root) => {
     const filtered = organismList.filter(passesFilter);
     filtered.sort((a,b) => String(b.collected_at_iso||'').localeCompare(String(a.collected_at_iso||'')));
     listHost.innerHTML = '';
-    listHost.appendChild(el('h2', {}, `Results (${filtered.length} of ${organismList.length})`));
+    listHost.appendChild(el('div', { class: 'row', style: { alignItems: 'center', gap: '10px' } },
+      el('h2', { style: { margin: 0 } }, 'Results'),
+      el('span', { class: 'n-counter' }, `n=${filtered.length}`),
+      el('span', { class: 'muted', style: { fontSize: '13px' } }, `of ${organismList.length} total`),
+    ));
     if (!filtered.length) {
-      listHost.appendChild(el('div', { class: 'empty' }, 'Nothing matches those filters.'));
+      listHost.appendChild(el('div', { class: 'empty', style: { marginTop: '10px' } }, 'Nothing matches those filters.'));
       return;
     }
     const page = filtered.slice(0, 200);
-    const list = el('div', { class: 'list' });
+    const list = el('div', { class: 'list', style: { marginTop: '10px' } });
     page.forEach(r => {
       list.appendChild(el('div', { class: 'list-item', style: { cursor: 'default' } },
         el('div', {},
@@ -1985,10 +2190,10 @@ routes.browse = async (root) => {
         el('h2', { style: { margin: 0 } }, 'Filters'),
         el('div', { class: 'row' }, refreshBtn, clearBtn)
       ),
-      species.length ? makeChipRow('Species', species, filters.species) : null,
-      sites.length ? makeChipRow('Site', sites, filters.site) : null,
-      collectors.length ? makeChipRow('Collector', collectors, filters.collector) : null,
-      projects.length ? makeChipRow('Project', projects, filters.project) : null,
+      speciesOpts.length ? makeFilterGroup('Species', speciesOpts, filters.species) : null,
+      siteOpts.length ? makeFilterGroup('Site', siteOpts, filters.site) : null,
+      collectorOpts.length ? makeFilterGroup('Collector', collectorOpts, filters.collector) : null,
+      projectOpts.length ? makeFilterGroup('Project', projectOpts, filters.project) : null,
       el('div', { class: 'filter-row' },
         el('div', { class: 'filter-label' }, 'Date'),
         el('div', { class: 'row' },
@@ -2019,11 +2224,14 @@ routes.export = async (root) => {
     try {
       const r = await playSyncTransition(() => syncToSheet());
       let msg;
-      if (r.count === 0 && !r.listsAdded) msg = 'Already up to date';
+      if (r.count === 0 && !r.listsAdded && r.serverSupportsLists !== false) msg = 'Already up to date';
       else if (r.renamed) msg = `Synced ${r.count} · renamed ${r.renamed} to resolve collision${r.renamed===1?'':'s'}`;
       else if (r.count === 0 && r.listsAdded) msg = `Pulled ${r.listsAdded} new list entr${r.listsAdded===1?'y':'ies'} from the team`;
       else msg = `Synced ${r.count} sample${r.count===1?'':'s'} → Google Sheet${r.listsAdded ? ` · +${r.listsAdded} list entr${r.listsAdded===1?'y':'ies'}` : ''}`;
       showToast(msg);
+      if (r.serverSupportsLists === false) {
+        alert('Samples synced, but your Apps Script is the old version — species/sites/projects are NOT syncing yet.\n\nFix: open the sheet → Extensions → Apps Script → Deploy → Manage deployments → pencil on the active one → Version: New version → Deploy.');
+      }
     } catch (e) {
       alert('Sync failed: ' + e.message);
     } finally {
