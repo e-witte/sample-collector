@@ -1,0 +1,16 @@
+{
+  "name": "Ichthyolog",
+  "short_name": "Ichthyolog",
+  "description": "Ichthyolog — field sample metadata collector for the Bernardi Lab.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#B3E5FC",
+  "theme_color": "#B3E5FC",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}
